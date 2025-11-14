@@ -1,0 +1,1 @@
+# scripts/run_pipeline.py가 호출하는 진짜 메인

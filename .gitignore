@@ -1,0 +1,67 @@
+# -------------------------
+# Python
+# -------------------------
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+
+# Virtual env
+venv/
+.env/
+*.env
+
+# -------------------------
+# Data / Models
+# -------------------------
+data/raw/
+data/processed/
+models/
+!models/.keep
+
+# -------------------------
+# Logs / Outputs
+# -------------------------
+logs/
+*.log
+*.txt
+*.out
+outputs/
+runs/
+
+# -------------------------
+# Images / Videos
+# -------------------------
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.gif
+*.tiff
+*.mp4
+*.avi
+*.mov
+
+# -------------------------
+# IDE / Editor
+# -------------------------
+.vscode/
+.idea/
+.history/
+
+# -------------------------
+# OS Files
+# -------------------------
+.DS_Store
+*.swp
+*.swo
+
+# -------------------------
+# Docker / runtime
+# -------------------------
+docker/*.pid
+docker/db_data/
