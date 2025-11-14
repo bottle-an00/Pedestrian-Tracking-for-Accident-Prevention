@@ -1,0 +1,1 @@
+# foot_uv → foot_bev 변환

@@ -1,0 +1,1 @@
+# Detections, Tracks, Trajectories 등 dataclass 정의
