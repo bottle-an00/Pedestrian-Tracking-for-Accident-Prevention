@@ -5,6 +5,17 @@ import cv2
 import open3d as o3d
 Pcd = o3d.geometry.PointCloud
 
+class CalibrationUtils:
+    @staticmethod
+    def invert_extrinsic_3x4(T_3x4: np.ndarray) -> np.ndarray:
+        assert T_3x4.shape == (3, 4)
+        R = T_3x4[:, :3]
+        t = T_3x4[:, 3:4]
+
+        R_inv = R.T
+        t_inv = -R_inv @ t
+
+        return np.hstack([R_inv, t_inv])
 
 class CameraLidarCalibrator:
     def __init__(self, intrinsic: np.ndarray, extrinsic: np.ndarray):
