@@ -8,3 +8,21 @@ test_data_dir:
   lidar: tests/test_data/lidar
   gps: tests/test_data/gps
 
+  calibration:
+    calib_Camera: tests/test_data/calib_Camera0.txt
+    calib_LiDAR_Camera: tests/test_data/calib_CameraToLidar0.txt
+    calib_LiDAR_Imu: tests/test_data/calib_LidarToImu.txt
+    initial_location: tests/test_data/pos_ENU0.txt
+
+dataset_root:
+  root: data/raw/053
+  images: data/raw/053/image0
+  lidar: data/raw/053/lidar
+  gps: data/raw/053/gps
+
+calibration:
+  calib_Camera: data/raw/053/calib_Camera0.txt
+  calib_LiDAR_Camera: data/raw/053/calib_CameraToLidar0.txt
+  calib_LiDAR_Imu: data/raw/053/calib_LidarToImu.txt
+  initial_location: data/raw/053/pos_ENU0.txt
+

@@ -1,4 +1,3 @@
-# tests/test_image_reader.py
 from pathlib import Path
 
 from src.core.config import load_yaml
@@ -10,10 +9,8 @@ def test_image_reader_list_and_iter():
 
     cfg = load_yaml("configs/system.yaml")
 
-    # 이미지가 들어있는 디렉터리 (네가 쓰는 실제 경로로 수정)
     root = Path(cfg["test_data_dir"]["images"])
 
-    # 디렉터리가 없으면 이 테스트는 스킵 (optional)
     if not root.exists():
         return
 
