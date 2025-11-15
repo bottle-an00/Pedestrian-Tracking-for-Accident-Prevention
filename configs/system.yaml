@@ -1,1 +1,10 @@
 # 전체 시스템 설정 (경로, 사용 모듈 on/off)
+
+project_root: .
+
+test_data_dir:
+  root: tests/test_data
+  images: tests/test_data/image0
+  lidar: tests/test_data/lidar
+  gps: tests/test_data/gps
+
