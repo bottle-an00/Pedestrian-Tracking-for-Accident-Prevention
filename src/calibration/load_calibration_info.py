@@ -14,7 +14,7 @@ class CalibrationInfoLoader:
         self.camera_extrinsics = np.array({})
 
 
-    def load_lidar_to_imu(self, path: str):
+    def load_lidar_to_imu(self, path: str) -> np.ndarray:
         calib = Path(path)
 
         if not Path(calib).exists():
@@ -27,7 +27,9 @@ class CalibrationInfoLoader:
 
         self.lidar_to_imu = T
 
-    def load_camera_calibration(self, path: str):
+        return T
+
+    def load_camera_calibration(self, path: str) -> np.ndarray:
         calib = Path(path)
 
         if not Path(calib).exists():
@@ -40,7 +42,9 @@ class CalibrationInfoLoader:
 
         self.camera_intrinsics = K
 
-    def load_camera_extrinsics(self, path: str):
+        return K
+
+    def load_camera_extrinsics(self, path: str) -> np.ndarray:
         calib = Path(path)
 
         if not Path(calib).exists():
@@ -52,3 +56,5 @@ class CalibrationInfoLoader:
             raise ValueError(f"[load_camera_extrinsics] Invalid camera extrinsic shape: {T.shape}")
 
         self.camera_extrinsics = T
+
+        return T

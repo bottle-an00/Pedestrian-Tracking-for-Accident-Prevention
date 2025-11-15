@@ -1,4 +1,5 @@
 from pathlib import Path
+import numpy as np 
 
 from src.core.config import load_yaml
 from src.calibration.load_calibration_info import CalibrationInfoLoader
@@ -27,6 +28,10 @@ def test_calibration_info_loader():
     assert loader.camera_extrinsics.shape == (3, 4)
     assert loader.lidar_to_imu.shape == (3, 4)
 
-    print("Camera Intrinsics:\n", loader.camera_intrinsics)
-    print("Camera Extrinsics:\n", loader.camera_extrinsics)
-    print("LiDAR to IMU Extrinsics:\n", loader.lidar_to_imu)
+    output_dir = Path(cfg["test_data_dir"]["outputs"]) / "calibration_info"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save the calibration matrices as .npy files
+    np.savetxt(output_dir / "camera_intrinsics.txt", loader.camera_intrinsics)
+    np.savetxt(output_dir / "camera_extrinsics.txt", loader.camera_extrinsics)
+    np.savetxt(output_dir / "lidar_to_imu.txt", loader.lidar_to_imu)

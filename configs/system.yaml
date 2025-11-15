@@ -7,7 +7,8 @@ test_data_dir:
   images: tests/test_data/image0
   lidar: tests/test_data/lidar
   gps: tests/test_data/gps
-
+  outputs: tests/outputs
+  
   calibration:
     calib_Camera: tests/test_data/calib_Camera0.txt
     calib_LiDAR_Camera: tests/test_data/calib_CameraToLidar0.txt
