@@ -28,6 +28,7 @@ models/
 # -------------------------
 logs/
 *.log
+*.txt
 *.out
 outputs/
 runs/
@@ -36,6 +37,7 @@ runs/
 # Images / Videos
 # -------------------------
 *.png
+*.jpg
 *.jpeg
 *.bmp
 *.gif
