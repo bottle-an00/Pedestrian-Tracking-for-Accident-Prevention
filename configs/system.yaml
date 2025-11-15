@@ -27,3 +27,10 @@ calibration:
   calib_LiDAR_Imu: data/raw/053/calib_LidarToImu.txt
   initial_location: data/raw/053/pos_ENU0.txt
 
+bev:
+  resolution: 0.01      # [m/px]
+  front: 20            # [m]
+  back: 1              # [m]
+  left: 5              # [m]
+  right: 5             # [m]
+  ground_z: -2.4       # [m]
