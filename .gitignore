@@ -1,67 +1,20 @@
-# -------------------------
-# Python
-# -------------------------
-__pycache__/
-*.py[cod]
-*.pyd
-*.so
-*.egg-info/
-dist/
+# ROS Catkin build files
+# These are generated when you run `catkin build`
 build/
-pip-wheel-metadata/
+devel/
+install/
 
-# Virtual env
-venv/
-.env/
-*.env
-
-# -------------------------
-# Data / Models
-# -------------------------
-data/raw/
-data/processed/
-models/
-!models/.keep
-
-# -------------------------
-# Logs / Outputs
-# -------------------------
+# ROS log files
 logs/
-*.log
-*.txt
-*.out
-outputs/
-runs/
 
-# -------------------------
-# Images / Videos
-# -------------------------
-*.png
-*.jpg
-*.jpeg
-*.bmp
-*.gif
-*.tiff
-*.mp4
-*.avi
-*.mov
+# Python temporary files
+*.pyc
+__pycache__/
 
-# -------------------------
-# IDE / Editor
-# -------------------------
-.vscode/
-.idea/
-.history/
-
-# -------------------------
-# OS Files
-# -------------------------
+# OS-specific and editor files
 .DS_Store
 *.swp
-*.swo
 
-# -------------------------
-# Docker / runtime
-# -------------------------
-docker/*.pid
-docker/db_data/
+# User-specific IDE settings
+.vscode/
+.idea/

@@ -1,0 +1,11 @@
+<launch>
+    <arg name="visualize" default="true" />
+
+    <node name="pipeline_node" pkg="pedestrian_tracking" type="yolo_detector.py" output="screen">
+        <rosparam command="load" file="$(find pedestrian_tracking)/configs/detector/yolo_detector.yaml" />
+                <param name="visualize" value="$(arg visualize)" />
+    </node>
+    <node if="$(arg visualize)" name="detector_image_view" pkg="image_view" type="image_view" output="screen">
+        <remap from="image" to="/pipeline_node/pipeline_vis_image"/>
+    </node>
+</launch>
