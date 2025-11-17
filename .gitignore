@@ -20,7 +20,6 @@ venv/
 # -------------------------
 data/raw/
 data/processed/
-models/
 !models/.keep
 
 # -------------------------
