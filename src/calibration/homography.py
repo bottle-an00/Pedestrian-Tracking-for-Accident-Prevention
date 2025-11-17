@@ -25,24 +25,11 @@ class Homography:
         self.cx = self.K[0, 2]
         self.cy = self.K[1, 2]
 
-        self.R_wc = self.extrinsic[:, :3]           # (3,3)
-        self.t_wc = self.extrinsic[:, 3:4]          # (3,1)
+        self.R_cw = self.extrinsic[:, :3]           # (3,3)
+        self.t_cw = self.extrinsic[:, 3:4]          # (3,1)
 
-        R_wc = self.R_wc 
-        R_cw = R_wc.T
-
-        cam_right = R_cw[:, 0]
-        cam_down  = R_cw[:, 1]
-        cam_forward = R_cw[:, 2]
-
-        cam_left = -cam_right
-        cam_up   = -cam_down
-
-        self.R_lw = np.stack([
-            cam_forward,
-            cam_left,
-            cam_up
-        ], axis=1).astype(np.float32)
+        self.R_wc = self.R_cw.T
+        self.t_wc = -self.R_wc @ self.t_cw
 
         self._map_x = None
         self._map_y = None
@@ -73,11 +60,11 @@ class Homography:
 
         Xw, Yw, Zw, bev_w, bev_h = self._create_bev_grid()
 
-        world_points = np.stack([Xw, Yw, Zw], axis=-1)  # (H, W, 3)
+        world_points = np.stack([-Yw, -Xw, Zw], axis=-1)  # (H, W, 3)
         world_points = world_points.reshape(-1, 3).T    # (3, N)
-        lidar_points = self.R_lw @ world_points  # (3, N)
 
-        cam_points = self.R_wc @ lidar_points + self.t_wc  # (3, N)
+        cam_points = self.R_wc @ world_points + self.t_wc  # (3, N)
+        print(cam_points)
         Xc = cam_points[0, :]
         Yc = cam_points[1, :]
         Zc = cam_points[2, :]
@@ -95,6 +82,8 @@ class Homography:
         bev_y_idx = bev_indices % bev_w
         bev_x_idx = bev_indices // bev_w
 
+        bev_x_idx = (bev_h - 1) - bev_x_idx
+        
         u_valid = u[valid]
         v_valid = v[valid]
 
@@ -105,6 +94,9 @@ class Homography:
         self._map_y = map_y
         self._bev_w = bev_w
         self._bev_h = bev_h
+
+        print("Zc min/max:", float(Zc.min()), float(Zc.max()))
+        print("num valid:", int((Zc > 0).sum()), "/", Zc.size)
 
     def warp(self, image_bgr: np.ndarray,
              border_value=(0, 0, 0)) -> np.ndarray:
