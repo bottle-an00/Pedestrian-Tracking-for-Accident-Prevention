@@ -29,8 +29,8 @@ calibration:
 
 bev:
   resolution: 0.01      # [m/px]
-  front: 20            # [m]
-  back: 1              # [m]
-  left: 5              # [m]
-  right: 5             # [m]
-  ground_z: -2.4       # [m]
+  front: 15            # [m]
+  back: 0              # [m]
+  left: 10              # [m]
+  right: 10             # [m]
+  ground_z: -1.67       # [m]

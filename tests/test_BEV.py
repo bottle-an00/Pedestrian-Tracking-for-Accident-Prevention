@@ -17,9 +17,6 @@ def test_BEV_homography():
     if not image_dir.exists():
         raise ValueError("Image directory does not exist.")
 
-    image_loader = ImageLoader()
-    img_items = image_loader.iter_imgs_cv2(image_dir)
-
     intrinsics_path = Path(cfg["test_data_dir"]["calibration"]["calib_Camera"])
     extrinsics_path = Path(cfg["test_data_dir"]["calibration"]["calib_LiDAR_Camera"])
 
@@ -41,9 +38,7 @@ def test_BEV_homography():
     print(f"Loaded intrinsics shape: {intrinsics.shape}")
     print(f"Loaded extrinsics shape: {extrinsics.shape}")
 
-    T_lidar_to_cam = calib_utils.invert_extrinsic_3x4(extrinsics)
-
-    H = Homography(intrinsics=intrinsics, extrinsics=T_lidar_to_cam)
+    H = Homography(intrinsics=intrinsics, extrinsics=extrinsics)
 
     bev_results = []
     for img_path, image in image_loader.iter_imgs_cv2(image_dir):
