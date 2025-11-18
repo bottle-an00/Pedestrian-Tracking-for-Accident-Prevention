@@ -7,7 +7,7 @@
 # dataset_base_dir: "/media/casey/Casey_Save/차량비전/178.융합센서_다중객체_추적_및_예측데이터/01.데이터/2.Validation/원천데이터/13_전방 보행자_val"
 
 # 사용할 YOLO 모델 파일의 전체 경로
-yolo_model_path: "./models/yolo11n.pt"
+yolo_model_path: "./models/yolo/yolo11n.pt"
 
 # 객체 탐지를 위한 신뢰도 임계값 (0.0 ~ 1.0)
 # default: 기본 임계값
