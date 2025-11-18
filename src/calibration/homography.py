@@ -70,7 +70,6 @@ class Homography:
         world_points = world_points.reshape(-1, 3).T    # (3, N)
 
         cam_points = self.R_wc @ world_points + self.t_wc  # (3, N)
-        print(cam_points)
         Xc = cam_points[0, :]
         Yc = cam_points[1, :]
         Zc = cam_points[2, :]
@@ -100,9 +99,6 @@ class Homography:
         self._map_y = map_y
         self._bev_w = bev_w
         self._bev_h = bev_h
-
-        print("Zc min/max:", float(Zc.min()), float(Zc.max()))
-        print("num valid:", int((Zc > 0).sum()), "/", Zc.size)
 
     def warp(self, image_bgr: np.ndarray,
              border_value=(0, 0, 0)) -> np.ndarray:

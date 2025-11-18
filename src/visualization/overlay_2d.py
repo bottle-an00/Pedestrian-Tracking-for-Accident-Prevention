@@ -1,6 +1,6 @@
 # bbox, ID, 속도 overlay
-
 import cv2
+import numpy as np
 
 class Visualizer:
     def draw_on_img(self, img, detections):
@@ -31,4 +31,24 @@ class Visualizer:
             cv2.circle(vis_img, (int(by), int(bx)), 5, color, -1)
 
         return vis_img
-    
+
+    def draw_points(self, bev_img, points, color=(0, 0, 255), radius=4):
+        img = bev_img.copy()
+
+        for p in points:
+            x, y = int(p[0]), int(p[1])
+            cv2.circle(img, (y, x), radius, color, -1)
+
+        return img
+
+    def draw_polyline(self, bev_img, points, color=(255, 0, 0), thickness=2):
+        if len(points) < 2:
+            return bev_img
+
+        img = bev_img.copy()
+
+        pts = np.array([(int(y), int(x)) for x, y in points], dtype=np.int32)
+
+        cv2.polylines(img, [pts], isClosed=False, color=color, thickness=thickness)
+
+        return img

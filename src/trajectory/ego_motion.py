@@ -32,9 +32,9 @@ class EgoMotionCompensator:
             )
 
         return compensated_detections
-    
+
     def inv_compensate(self, traj_point:TrajectoryPoint, ego_info: GpsImuSample):
-        
+
         yaw = np.deg2rad(ego_info.heading)
         c, s = np.cos(yaw), np.sin(yaw)
 
@@ -51,6 +51,21 @@ class EgoMotionCompensator:
             v=float(p_local[1]),
             t=traj_point.t
         )
+
+    def inv_compensate_list(self, point: List, ego_info: GpsImuSample):
+
+        yaw = np.deg2rad(ego_info.heading)
+        c, s = np.cos(yaw), np.sin(yaw)
+
+        R_inv = np.array([[ c,  s],
+                          [-s,  c]])   # R(-yaw)
+        T = np.array([ego_info.x, ego_info.y])
+
+        p_global = np.array(point).astype(float).reshape(2)
+
+        p_local = R_inv @ (p_global - T)
+
+        return (float(p_local[0]), float(p_local[1]))
 
     def inv_compensate_all(self, trajectory_points, ego_info):
         return [self.inv_compensate(p, ego_info) for p in trajectory_points]
