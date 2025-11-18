@@ -34,24 +34,26 @@ class GpsImuLoader:
 
     def iter_gps_imu_path(self, root_dir: str | Path) -> Iterable[Path]:
         root = Path(root_dir)
-
+    
         if not root.exists():
             raise FileNotFoundError(f"[iter_gps_imu_paths] Directory not found: {root}")
-
-        for p in root.rglob('*'):
-            if p.is_file() and p.suffix.lower() in GPS_EXT:
-                yield p
+    
+        gps_files = sorted(
+            [p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in GPS_EXT],
+            key=lambda p: int(p.stem)   # ← 숫자 기반 정렬
+        )
+    
+        for p in gps_files:
+            yield p
 
     def list_gps_imu_paths(self, root_dir: str | Path) -> List[Path]:
         return list(self.iter_gps_imu_path(root_dir))
 
-    def load_data(self, path: str | Path) -> List[GpsImuSample]:
+    def load_data(self, path: str | Path) -> GpsImuSample:
 
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"[GpsImuLoader] File not found: {path}")
-
-        data: List[GpsImuSample] = []
 
         with open(path, 'r') as f:
             reader = csv.reader(f)
@@ -101,9 +103,7 @@ class GpsImuLoader:
                     print(f"[load_gps_imu_txt] Skip invalid line {line}: {e}")
                     continue
 
-                data.append(sample)
-
-        return data
+        return sample
 
     def iter_data(self,
                   root_dir: str | Path

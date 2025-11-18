@@ -24,10 +24,11 @@ class Visualizer:
 
         return vis_img
 
-    def draw_on_BEV(self, bev_img, foot_bevs):
+    def draw_on_BEV(self, bev_img, foot_bevs, color=(0, 255, 0)):
         vis_img = bev_img.copy()
 
         for bx, by in foot_bevs:
-            cv2.circle(vis_img, (by, bx), 5, (0, 0, 255), -1)
+            cv2.circle(vis_img, (int(by), int(bx)), 5, color, -1)
 
         return vis_img
+    

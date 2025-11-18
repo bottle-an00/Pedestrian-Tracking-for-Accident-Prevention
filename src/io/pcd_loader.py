@@ -11,15 +11,20 @@ class PcdLoader:
 
     def __init__(self):
         pass
+    
     def iter_pcd_paths(self, root_dir: str | Path) -> Iterable[Path]:
         root = Path(root_dir)
-
+    
         if not root.exists():
             raise FileNotFoundError(f"[iter_pcd_paths] Directory not found: {root}")
+    
+        pcd_files = sorted(
+            [p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in PCD_EXTS]
+        )
+    
+        for p in pcd_files:
+            yield p
 
-        for p in root.rglob('*'):
-            if p.is_file() and p.suffix.lower() in PCD_EXTS:
-                yield p
 
     def list_pcd_paths(self, root_dir: str | Path) -> List[Path]:
         return list(self.iter_pcd_paths(root_dir))

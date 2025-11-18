@@ -14,13 +14,16 @@ class ImageLoader:
 
     def iter_img_paths(self, root_dir: str | Path) -> Iterable[Path]:
         root = Path(root_dir)
-
+    
         if not root.exists():
-            raise FileNotFoundError(f"[iter_img_paths] Directory not fount: {root}")
-
-        for p in root.rglob('*'):
-            if p.is_file() and p.suffix.lower() in IMG_EXTS:
-                yield p
+            raise FileNotFoundError(f"[iter_img_paths] Directory not found: {root}")
+    
+        img_files = sorted(
+            [p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in IMG_EXTS]
+        )
+    
+        for p in img_files:
+            yield p
 
     def list_img_paths(self, root_dir:str | Path) -> List[Path]:
         return list(self.iter_img_paths(root_dir))
