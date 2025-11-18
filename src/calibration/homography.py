@@ -14,6 +14,12 @@ class Homography:
         self.bev_right = float(cfg["bev"]["right"])
         self.bev_ground_z = float(cfg["bev"]["ground_z"])
 
+        self.bev_x_min = -self.bev_back
+        self.bev_x_max =  self.bev_front
+
+        self.bev_y_min = -self.bev_right
+        self.bev_y_max =  self.bev_left
+
         assert intrinsics.shape == (3, 3)
         assert extrinsics.shape == (3, 4)
 
@@ -83,7 +89,7 @@ class Homography:
         bev_x_idx = bev_indices // bev_w
 
         bev_x_idx = (bev_h - 1) - bev_x_idx
-        
+
         u_valid = u[valid]
         v_valid = v[valid]
 
@@ -113,3 +119,17 @@ class Homography:
             borderValue=border_value,
         )
         return bev_bgr
+
+    def pixel_to_bev_warp(self, u, v, radius=2):
+
+        if self._map_x is None or self._map_y is None:
+            self._build_bev_remap()
+
+        diff_x = np.abs(self._map_x - u)
+        diff_y = np.abs(self._map_y - v)
+
+        score = diff_x + diff_y
+
+        bev_x, bev_y = np.unravel_index(np.argmin(score), score.shape)
+
+        return int(bev_x), int(bev_y)

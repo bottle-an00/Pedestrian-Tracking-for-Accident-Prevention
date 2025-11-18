@@ -13,7 +13,7 @@ class BaseTracker:
 
     def process(self, img):
         raise NotImplementedError
-        
+
 
 class UltralyticsTracker(BaseTracker):
     """
