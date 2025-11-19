@@ -34,12 +34,13 @@ def test_full_pipeline():
 
     # Subfolders
     out_bev_traj = out_root / "bev_trajectory"
+    out_bev_result = out_root / "bev_result"
     out_img_traj = out_root / "img_trajectory"
     out_tracking = out_root / "tracking"
     out_ekf_bev = out_root / "ekf_bev"
     out_ekf_img = out_root / "ekf_img"
 
-    for p in [out_bev_traj, out_img_traj, out_tracking, out_ekf_bev, out_ekf_img]:
+    for p in [out_bev_traj, out_bev_result, out_img_traj, out_tracking, out_ekf_bev, out_ekf_img]:
         p.mkdir(parents=True, exist_ok=True)
 
     # ---------------------------------------------------------
@@ -101,7 +102,8 @@ def test_full_pipeline():
         bev_img = H.warp(image)
 
         foot_bevs = bev_conv.foot_uv_to_foot_bev(detections)
-
+        bev_result = vis.draw_on_BEV(bev_img.copy(), 0, [p.foot_bev for p in foot_bevs])
+        cv2.imwrite(str(out_bev_result / f"bev_{img_path.name}"), bev_result)
         # -----------------------------
         # C. Ego-motion 보정 + Trajectory 저장
         # -----------------------------
