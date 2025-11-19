@@ -22,12 +22,11 @@ def test_gps_imu_loader():
             assert path.exists()
 
             assert sample is not None
-            for e in sample:
-                assert isinstance(e, GpsImuSample)
-                assert hasattr(e, "time")
-                assert hasattr(e, "x")
-                assert hasattr(e, "y")
-                assert hasattr(e, "z")
-                assert hasattr(e, "roll")
-                assert hasattr(e, "pitch")
-                assert hasattr(e, "heading")
+            assert isinstance(sample, GpsImuSample)
+            assert hasattr(sample, "time")
+            assert hasattr(sample, "x")
+            assert hasattr(sample, "y")
+            assert hasattr(sample, "z")
+            assert hasattr(sample, "roll")
+            assert hasattr(sample, "pitch")
+            assert hasattr(sample, "heading")

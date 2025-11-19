@@ -25,12 +25,12 @@ def test_tracker():
 
     image_dir = Path(cfg["test_data_dir"]["images"])
     gps_dir = Path(cfg["test_data_dir"]["gps"])
-    
+
     if not image_dir.exists():
-        raise ValueError("Image_directory does not exist.") 
+        raise ValueError("Image_directory does not exist.")
     if not gps_dir.exists():
         raise ValueError("GPS directory does not exist.")
-    
+
     intrinsics_path = Path(cfg["test_data_dir"]["calibration"]["calib_Camera"])
     extrinsics_path = Path(cfg["test_data_dir"]["calibration"]["calib_LiDAR_Camera"])
 
@@ -72,7 +72,7 @@ def test_tracker():
     gps_items = gps_loader.iter_data(gps_dir)
 
     for img_item, gps_item in zip(img_items, gps_items):
-        
+
         img_path, image = img_item
         gps_path, gps_data = gps_item
         print(f"[Trajectory Test] Processing Image: {img_path} with GPS: {gps_path}")
@@ -91,14 +91,14 @@ def test_tracker():
         compensated_bevs = ego_compensator.compensate(foot_bevs, gps_data)
 
         trajectory_buffer.add(compensated_bevs, gps_data.time)
-        
+
         # 현재 만들어진 traj 확인 -> traj_id 기준으로 latest point 확인
         bev_overlay = bev_img.copy()
         for traj_id, traj in trajectory_buffer.get_all().items():
-            
+
             bev_traj = ego_compensator.inv_compensate_all(traj, gps_data)
-            bev_overlay = vis.draw_on_BEV(bev_overlay, [point.foot_bev for point in bev_traj], color=(0,(100*(traj_id+1))%255,0))
-        
+            bev_overlay = vis.draw_on_BEV(bev_overlay, traj_id, [point.foot_bev for point in bev_traj])
+
         cv2.imwrite(str(output_root / f"bev_overlay_{img_path.name}"), bev_overlay)
 
     assert True

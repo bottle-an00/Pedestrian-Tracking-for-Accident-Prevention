@@ -1,4 +1,5 @@
 # bbox, ID, 속도 overlay
+import random as pyrandom
 import cv2
 import numpy as np
 
@@ -20,32 +21,32 @@ class Visualizer:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
             foot_u, foot_v = map(int, det["foot_uv"])
-            cv2.circle(vis_img, (foot_u, foot_v), 5, (0, 0, 255), -1)
+            cv2.circle(vis_img, (foot_u, foot_v), 5, self.id_to_color(track_id), -1)
 
         return vis_img
 
-    def draw_on_BEV(self, bev_img, foot_bevs, color=(0, 255, 0)):
+    def draw_on_BEV(self, bev_img, id, foot_bevs):
         vis_img = bev_img.copy()
         cnt=0
 
         for bx, by in foot_bevs:
-            cv2.circle(vis_img, (int(by), int(bx)), 5, color, -1)
+            cv2.circle(vis_img, (int(by), int(bx)), 5, self.id_to_color(id), -1)
             cv2.putText(vis_img, str(cnt), (int(by), int(bx)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)
             cnt+=1
-            
+
         return vis_img
 
-    def draw_points(self, bev_img, points, color=(0, 0, 255), radius=4):
+    def draw_points(self, bev_img, id, points, radius=4):
         img = bev_img.copy()
 
         for p in points:
             x, y = int(p[0]), int(p[1])
-            cv2.circle(img, (y, x), radius, color, -1)
+            cv2.circle(img, (y, x), radius, self.id_to_color(id), -1)
 
         return img
 
-    def draw_polyline(self, bev_img, points, color=(255, 0, 0), thickness=2):
+    def draw_polyline(self, bev_img, id, points, color=(255, 0, 0), thickness=2):
         if len(points) < 2:
             return bev_img
 
@@ -53,8 +54,15 @@ class Visualizer:
 
         pts = np.array([(int(y), int(x)) for x, y in points], dtype=np.int32)
         for pt in pts:
-            cv2.circle(img, (pt[0], pt[1]), 3, (0,0,0), -1)
+            cv2.circle(img, (pt[0], pt[1]), 3, self.id_to_color(id), -1)
 
         cv2.polylines(img, [pts], isClosed=False, color=color, thickness=thickness)
 
         return img
+
+    def id_to_color(self, track_id: int):
+        rnd = pyrandom.Random(track_id)
+        r = rnd.randint(0, 150)
+        g = rnd.randint(150, 255)
+        b = rnd.randint(50, 200)
+        return (b, g, r)

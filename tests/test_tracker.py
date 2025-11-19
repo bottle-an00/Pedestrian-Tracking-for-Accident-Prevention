@@ -80,8 +80,8 @@ def test_tracker():
 
         assert len(foot_bevs) > 0
 
-        bev_overlay = vis.draw_on_BEV(bev_img, foot_bevs)
-        
+        bev_overlay = vis.draw_on_BEV(bev_img, 0, foot_bevs)
+
         cv2.imwrite(str(suboutput_root3 / f"bev_overlay_{img_path.name}"), bev_overlay)
 
     print(f"[TEST] Visualizer + YOLO tracker results saved at: {output_root}")

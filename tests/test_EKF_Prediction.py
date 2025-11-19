@@ -128,8 +128,8 @@ def test_tracker():
             bev_traj = ego_compensator.inv_compensate_all(traj, gps_data)
             bev_overlay = vis.draw_on_BEV(
                 bev_overlay,
-                [point.foot_bev for point in bev_traj],
-                color=(0, (150 * (traj_id + 1)) % 255, 0)
+                track_id,
+                [point.foot_bev for point in bev_traj]
             )
             # 원본 이미지에 그리기
             uv_traj = bev_converter.foot_bev_to_foot_uv([point.foot_bev for point in bev_traj])
@@ -148,10 +148,7 @@ def test_tracker():
         for track_id, xy in ekf_results.items():
             # bev img에 그리기
             new_xy = ego_compensator.inv_compensate_list(xy, gps_data)
-            bev_overlay = vis.draw_points(
-                bev_overlay,
-                [new_xy], color=(0, 0, 255), radius=6
-            )
+            bev_overlay = vis.draw_points(bev_overlay, track_id, [new_xy], radius=6)
             # 원본 이미지에 그리기
             uv = bev_converter.foot_bev_to_foot_uv([new_xy])
             dst = vis.draw_on_img(
@@ -175,6 +172,7 @@ def test_tracker():
                     new_future.append(ego_compensator.inv_compensate_list(future_point, gps_data))
                 bev_overlay = vis.draw_polyline(
                     bev_overlay,
+                    track_id,
                     new_future,
                     color=(255, 0, 0),
                     thickness=2
