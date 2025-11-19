@@ -15,7 +15,7 @@ class EKFTracker:
             [0, 1, 0, 0, 0, 0]
         ], dtype=np.float32)
 
-        self.R = np.eye(2, dtype=np.float32) * 0.2
+        self.R = np.eye(2, dtype=np.float32) * 3
 
         self._update_F_Q(dt)
 
@@ -29,7 +29,7 @@ class EKFTracker:
             [0, 0, 0,  0, 0, 1]
         ], dtype=np.float32)
 
-        q = 1.5
+        q = 0.5
         self.Q = q * np.array([
             [dt**4/4,    0,         dt**3/2,   0,        dt**2/2, 0],
             [0,       dt**4/4,     0,         dt**3/2,   0,        dt**2/2],

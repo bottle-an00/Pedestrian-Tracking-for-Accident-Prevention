@@ -29,6 +29,9 @@ class Visualizer:
         vis_img = bev_img.copy()
         cnt=0
 
+        if foot_bevs is None or len(foot_bevs) == 0:
+            return vis_img
+
         for bx, by in foot_bevs:
             cv2.circle(vis_img, (int(by), int(bx)), 5, self.id_to_color(id), -1)
             cv2.putText(vis_img, str(cnt), (int(by), int(bx)),

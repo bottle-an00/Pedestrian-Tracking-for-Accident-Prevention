@@ -16,31 +16,31 @@ class CalibrationUtils:
         t_inv = -R_inv @ t
 
         return np.hstack([R_inv, t_inv])
-    
+
     def euler_to_rot(roll, pitch, yaw):
         # rad 변환
         r = np.deg2rad(roll)
         p = np.deg2rad(pitch)
         y = np.deg2rad(yaw)
-    
+
         R_x = np.array([
             [1, 0, 0],
             [0, np.cos(r), -np.sin(r)],
             [0, np.sin(r), np.cos(r)]
         ])
-    
+
         R_y = np.array([
             [np.cos(p), 0, np.sin(p)],
             [0, 1, 0],
             [-np.sin(p), 0, np.cos(p)]
         ])
-    
+
         R_z = np.array([
             [np.cos(y), -np.sin(y), 0],
             [np.sin(y), np.cos(y), 0],
             [0, 0, 1]
         ])
-    
+
         # ZYX 순
         R = R_z @ R_y @ R_x
         return R
@@ -78,7 +78,7 @@ class CameraLidarCalibrator:
         img_points = img_points_homogeneous[:, :2] / img_points_homogeneous[:, 2:3]
 
         return img_points
-    
+
     def extract_valid_points(self,
                              points_cloud: np.ndarray,
                              distance_threshold: float = 40.0) -> np.ndarray:
