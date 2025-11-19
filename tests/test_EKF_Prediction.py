@@ -70,6 +70,13 @@ def test_tracker():
 
     output_root = Path(cfg["test_data_dir"]["outputs"]) / "EKF_results"
     output_root.mkdir(parents=True, exist_ok=True)
+    
+    sub_output1 = output_root / "bev_overlay"
+    sub_output2 = output_root / "img_overlay"
+
+    sub_outputs = [sub_output1, sub_output2]
+    for sub_output in sub_outputs:
+        sub_output.mkdir(parents=True, exist_ok=True)
 
     img_items = image_loader.iter_imgs_cv2(image_dir)
     gps_items = gps_loader.iter_data(gps_dir)
@@ -106,40 +113,85 @@ def test_tracker():
             # (A) EKF 업데이트 (현재 추정)
             ekf_xy = ekf_manager.update(track_id, foot_bev,gps_data.time)
             ekf_results[track_id] = ekf_xy
-            print("EKF x state:", ekf_manager.trackers[track_id].x)
+
             # (B) 미래 20스텝 예측
             future_traj = ekf_manager.predict_future(track_id, steps=20)
             ekf_future_results[track_id] = future_traj
 
         bev_overlay = bev_img.copy()
+        dst = image.copy()
 
         # (1) trajectory_buffer 기반 과거 traj 시각화
         for traj_id, traj in trajectory_buffer.get_all().items():
+            # bev에 그리기
             bev_traj = ego_compensator.inv_compensate_all(traj, gps_data)
             bev_overlay = vis.draw_on_BEV(
                 bev_overlay,
                 [point.foot_bev for point in bev_traj],
                 color=(0, (150 * (traj_id + 1)) % 255, 0)    
             )
+            # 원본 이미지에 그리기
+            uv_traj = bev_converter.foot_bev_to_foot_uv([point.foot_bev for point in bev_traj])
+            dst = vis.draw_on_img(
+                dst,
+                [{
+                    "bbox": (0,0,0,0),   # bbox는 그리지 않음
+                    "id": traj_id,
+                    "class": "trajectory",
+                    "score": 1.0,
+                    "foot_uv": uv
+                } for uv in uv_traj]
+            )
 
         # (2) EKF 현재 위치 (빨간 점)
         for track_id, xy in ekf_results.items():
+            # bev img에 그리기
             new_xy = ego_compensator.inv_compensate_list(xy, gps_data)
             bev_overlay = vis.draw_points(
                 bev_overlay,
                 [new_xy], color=(0, 0, 255), radius=6
             )
+            # 원본 이미지에 그리기
+            uv = bev_converter.foot_bev_to_foot_uv([new_xy])
+            dst = vis.draw_on_img(
+                dst,
+                [{
+                    "bbox": (0,0,0,0),   # bbox는 그리지 않음
+                    "id": track_id,
+                    "class": "ekf_position",
+                    "score": 1.0,
+                    "foot_uv": uv[0]
+                }]
+            )
 
-        # (3) EKF 미래 trajectory (파란 점)
+        # (3) EKF 미래 trajectory (파란 선)
         for track_id, future in ekf_future_results.items():
             if future is not None:
-                new_future = ego_compensator.inv_compensate_list(future[10], gps_data)
-                bev_overlay = vis.draw_points(
+                
+                # bev img에 그리기
+                new_future = []
+                for future_point in future:
+                    new_future.append(ego_compensator.inv_compensate_list(future_point, gps_data))
+                bev_overlay = vis.draw_polyline(
                     bev_overlay,
-                    [new_future],
+                    new_future,
                     color=(255, 0, 0),
-                    radius=4
+                    thickness=2
                 )
 
-        cv2.imwrite(str(output_root / f"bev_overlay_{img_path.name}"), bev_overlay)
+                # 원본 이미지에 그리기
+                uv_future = bev_converter.foot_bev_to_foot_uv(new_future)
+                dst = vis.draw_on_img(
+                   dst,
+                   [{
+                       "bbox": (0,0,0,0),   # bbox는 그리지 않음
+                       "id": track_id,
+                       "class": "ekf_future",
+                       "score": 1.0,
+                       "foot_uv": uv
+                   } for uv in uv_future]
+                )
+
+        cv2.imwrite(str(sub_output1 / f"bev_overlay_{img_path.name}"), bev_overlay)
+        cv2.imwrite(str(sub_output2 / f"img_overlay_{img_path.name}"), dst)
     assert True

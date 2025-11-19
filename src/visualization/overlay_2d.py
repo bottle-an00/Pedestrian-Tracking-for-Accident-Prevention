@@ -52,6 +52,8 @@ class Visualizer:
         img = bev_img.copy()
 
         pts = np.array([(int(y), int(x)) for x, y in points], dtype=np.int32)
+        for pt in pts:
+            cv2.circle(img, (pt[0], pt[1]), 3, (0,0,0), -1)
 
         cv2.polylines(img, [pts], isClosed=False, color=color, thickness=thickness)
 

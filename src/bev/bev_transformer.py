@@ -41,3 +41,11 @@ class BevTransformer:
                 )
             )
         return bev_detections
+    
+    def foot_bev_to_foot_uv(self, bevs:List) -> List:
+        results = []
+        for bev in bevs:
+            foot_uv_x, foot_uv_y = self.homography.bev_to_pixel(bev[0], bev[1])
+            if foot_uv_x is not None and foot_uv_y is not None:
+                results.append((foot_uv_x, foot_uv_y))
+        return results
