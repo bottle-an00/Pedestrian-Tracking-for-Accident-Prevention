@@ -24,17 +24,18 @@ from src.visualization.overlay_2d import Visualizer
 
 def test_tracker():
     cfg = load_yaml("configs/system.yaml")
-
-    image_dir = Path(cfg["test_data_dir"]["images"])
-    gps_dir = Path(cfg["test_data_dir"]["gps"])
+    root_dir = "test_data_dir"
+    image_dir = Path(cfg[root_dir]["images"])
+    gps_dir = Path(cfg[root_dir]["gps"])
 
     if not image_dir.exists():
+        print(f"Image directory: {image_dir}")
         raise ValueError("Image_directory does not exist.")
     if not gps_dir.exists():
         raise ValueError("GPS directory does not exist.")
 
-    intrinsics_path = Path(cfg["test_data_dir"]["calibration"]["calib_Camera"])
-    extrinsics_path = Path(cfg["test_data_dir"]["calibration"]["calib_LiDAR_Camera"])
+    intrinsics_path = Path(cfg[root_dir]["calibration"]["calib_Camera"])
+    extrinsics_path = Path(cfg[root_dir]["calibration"]["calib_LiDAR_Camera"])
 
     calib_loader = CalibrationInfoLoader()
     intrinsics = calib_loader.load_camera_calibration(intrinsics_path)
@@ -68,9 +69,9 @@ def test_tracker():
     trajectory_buffer = TrajectoryBuffer(max_length=100)
     ekf_manager = EKFManager()
 
-    output_root = Path(cfg["test_data_dir"]["outputs"]) / "EKF_results"
+    output_root = Path(cfg[root_dir]["outputs"]) / "EKF_results"
     output_root.mkdir(parents=True, exist_ok=True)
-    
+
     sub_output1 = output_root / "bev_overlay"
     sub_output2 = output_root / "img_overlay"
 
@@ -128,7 +129,7 @@ def test_tracker():
             bev_overlay = vis.draw_on_BEV(
                 bev_overlay,
                 [point.foot_bev for point in bev_traj],
-                color=(0, (150 * (traj_id + 1)) % 255, 0)    
+                color=(0, (150 * (traj_id + 1)) % 255, 0)
             )
             # 원본 이미지에 그리기
             uv_traj = bev_converter.foot_bev_to_foot_uv([point.foot_bev for point in bev_traj])
@@ -167,7 +168,7 @@ def test_tracker():
         # (3) EKF 미래 trajectory (파란 선)
         for track_id, future in ekf_future_results.items():
             if future is not None:
-                
+
                 # bev img에 그리기
                 new_future = []
                 for future_point in future:

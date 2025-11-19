@@ -8,20 +8,21 @@ test_data_dir:
   lidar: tests/test_data/lidar
   gps: tests/test_data/gps
   outputs: tests/outputs
-  
+
   calibration:
     calib_Camera: tests/test_data/calib_Camera0.txt
     calib_LiDAR_Camera: tests/test_data/calib_CameraToLidar0.txt
     calib_LiDAR_Imu: tests/test_data/calib_LidarToImu.txt
     initial_location: tests/test_data/pos_ENU0.txt
 
-dataset_id: 033
+dataset_id: "053"
+root: data/raw/${dataset_id}
 
-dataset_root: 
-  root: data/raw/${dataset_id}
+dataset_dir:
   images: ${root}/image0
   lidar: ${root}/lidar
   gps: ${root}/gps
+  outputs: ${root}/outputs
 
   calibration:
     calib_Camera: ${root}/calib_Camera0.txt
