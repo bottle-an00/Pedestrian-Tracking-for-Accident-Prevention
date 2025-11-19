@@ -129,3 +129,24 @@ class Homography:
         bev_x, bev_y = np.unravel_index(np.argmin(score), score.shape)
 
         return int(bev_x), int(bev_y)
+    
+    def bev_to_pixel(self, bev_x, bev_y):
+
+        bev_x = (self._bev_h - 1) - bev_x
+        
+        Xw = - (bev_y * self.bev_resolution + self.bev_y_min)
+        Yw = - (bev_x * self.bev_resolution + self.bev_x_min)
+        Zw = self.bev_ground_z
+
+        Pw = np.array([[Xw], [Yw], [Zw]], dtype=np.float32)   
+
+        Pc = self.R_wc @ Pw + self.t_wc  
+
+        Xc, Yc, Zc = Pc[0,0], Pc[1,0], Pc[2,0]
+        if Zc <= 0:
+            return None  
+
+        u = self.fx * (Xc / Zc) + self.cx
+        v = self.fy * (Yc / Zc) + self.cy
+
+        return int(u), int(v)
