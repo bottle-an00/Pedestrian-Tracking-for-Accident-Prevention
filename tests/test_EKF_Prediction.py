@@ -119,7 +119,7 @@ def test_tracker():
             bev_overlay = vis.draw_on_BEV(
                 bev_overlay,
                 [point.foot_bev for point in bev_traj],
-                color=(0, (150 * (traj_id + 1)) % 255, 0)    # 녹색 계열
+                color=(0, (150 * (traj_id + 1)) % 255, 0)    
             )
 
         # (2) EKF 현재 위치 (빨간 점)
@@ -130,7 +130,7 @@ def test_tracker():
                 [new_xy], color=(0, 0, 255), radius=6
             )
 
-        # (3) EKF 미래 trajectory (파란 선)
+        # (3) EKF 미래 trajectory (파란 점)
         for track_id, future in ekf_future_results.items():
             if future is not None:
                 new_future = ego_compensator.inv_compensate_list(future[10], gps_data)
@@ -141,6 +141,5 @@ def test_tracker():
                     radius=4
                 )
 
-        # 8. 저장
         cv2.imwrite(str(output_root / f"bev_overlay_{img_path.name}"), bev_overlay)
     assert True
