@@ -17,17 +17,17 @@ test_data_dir:
 
 dataset_id: 033
 
-dataset_root:
+dataset_root: 
   root: data/raw/${dataset_id}
-  images: data/raw/${dataset_id}/image0
-  lidar: data/raw/${dataset_id}/lidar
-  gps: data/raw/${dataset_id}/gps
+  images: ${root}/image0
+  lidar: ${root}/lidar
+  gps: ${root}/gps
 
-calibration:
-  calib_Camera: data/raw/${dataset_id}/calib_Camera0.txt
-  calib_LiDAR_Camera: data/raw/${dataset_id}/calib_CameraToLidar0.txt
-  calib_LiDAR_Imu: data/raw/${dataset_id}/calib_LidarToImu.txt
-  initial_location: data/raw/${dataset_id}/pos_ENU0.txt
+  calibration:
+    calib_Camera: ${root}/calib_Camera0.txt
+    calib_LiDAR_Camera: ${root}/calib_CameraToLidar0.txt
+    calib_LiDAR_Imu: ${root}/calib_LidarToImu.txt
+    initial_location: ${root}/pos_ENU0.txt
 
 bev:
   resolution: 0.01      # [m/px]
