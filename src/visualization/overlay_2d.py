@@ -26,10 +26,14 @@ class Visualizer:
 
     def draw_on_BEV(self, bev_img, foot_bevs, color=(0, 255, 0)):
         vis_img = bev_img.copy()
+        cnt=0
 
         for bx, by in foot_bevs:
             cv2.circle(vis_img, (int(by), int(bx)), 5, color, -1)
-
+            cv2.putText(vis_img, str(cnt), (int(by), int(bx)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)
+            cnt+=1
+            
         return vis_img
 
     def draw_points(self, bev_img, points, color=(0, 0, 255), radius=4):
