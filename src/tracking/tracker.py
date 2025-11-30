@@ -1,53 +1,25 @@
-# src/tracking/yolo_tracker.py
+# src/tracking/tracker.py
+# ByteTrack 기반 트래킹 모듈
 
-import numpy as np
-from ultralytics import YOLO
-
-
-class BaseTracker:
-    """추적기의 공통 인터페이스"""
-    def __init__(self, model_path, conf_thres_config, target_class_names=None):
-        self.model_path = model_path
-        self.conf_thres_config = conf_thres_config
-        self.target_class_names = target_class_names
-
-    def process(self, img):
-        raise NotImplementedError
+from src.detection.yolo_detector import YoloDetector
 
 
-class UltralyticsTracker(BaseTracker):
+class ByteTracker:
     """
-    YOLO + (BoT-SORT or ByteTrack) 기반 트래킹 모듈
-    - model_path: YOLO 모델
-    - conf_thres_config:
-        dict → 클래스별 threshold
-        float → 전체 공통 threshold
-    - target_class_names: ['person', 'car'] 이런 식
-    - tracker_type: 'botsort' 또는 'bytetrack'
+    YOLO + ByteTrack 기반 트래킹 모듈
     """
-    def __init__(self, model_path, conf_thres_config, target_class_names=None, tracker_type="bytetrack"):
-        super().__init__(model_path, conf_thres_config, target_class_names)
 
-        # YOLO 모델 로드
-        self.model = YOLO(model_path)
-        self.names = self.model.names
+    def __init__(self, model_path, conf_thres_config, target_class_names=None, imgsz=640):
+        # YoloDetector 생성
+        self._detector = YoloDetector(model_path, conf_thres_config, target_class_names, imgsz)
 
-        # 클래스 인덱스 필터링
-        if target_class_names:
-            self.target_indices = [
-                k for k, v in self.names.items() if v in target_class_names
-            ]
-        else:
-            self.target_indices = None
-
-        # conf threshold
-        if isinstance(conf_thres_config, dict):
-            self.min_conf_thres = min(conf_thres_config.values())
-        else:
-            self.min_conf_thres = conf_thres_config
-
-        # tracker YAML (Ultralytics가 제공하는 기본 config)
-        self.tracker_config = f"{tracker_type}.yaml"
+        # detector에서 필요한 속성 참조
+        self.model = self._detector.model
+        self.names = self._detector.names
+        self.imgsz = self._detector.imgsz
+        self.conf_thres_config = self._detector.conf_thres_config
+        self.target_indices = self._detector.target_indices
+        self.min_conf_thres = self._detector.min_conf_thres
 
     def process(self, img):
         """
@@ -57,25 +29,33 @@ class UltralyticsTracker(BaseTracker):
             "bbox": [x1, y1, w, h],
             "score": conf,
             "class": cls_name,
-            "foot_uv": [u, v]
+            "foot_uv": [u, v],
+            "keypoints": [[x, y, conf], ...],
+            "foot_uv_type": "detected" | "out_of_fov",
+            "out_of_fov_info": {...} | None
         }]
         """
+        img_h, img_w = img.shape[:2]
         results = self.model.track(
             img,
             persist=True,
             verbose=False,
             classes=self.target_indices,
             conf=self.min_conf_thres,
-            tracker=self.tracker_config
+            tracker="bytetrack.yaml",
+            imgsz=self.imgsz
         )[0]
 
         if results.boxes is None or results.boxes.id is None:
             return []
 
+        # Raw keypoints 추출
+        raw_keypoints = self._detector._extract_raw_keypoints_matched(img, results)
+
         detections = []
-        for box in results.boxes.data:
-            x1, y1, x2, y2 = map(float, box[:4])
-            track_id, conf, cls_id = int(box[4]), float(box[5]), int(box[6])
+        for i, box in enumerate(results.boxes.data):
+            x1, y1, x2, y2, track_id, conf, cls_id = map(float, box)
+            track_id, cls_id = int(track_id), int(cls_id)
             cls_name = self.names.get(cls_id, "unknown")
 
             # 클래스별 threshold 적용
@@ -86,15 +66,30 @@ class UltralyticsTracker(BaseTracker):
                 if conf < threshold:
                     continue
 
-            # foot point = bounding box 아래 중앙
-            foot_u, foot_v = (x1 + x2) / 2.0, y2
+            # --- 발 위치 추정 로직 ---
+            foot_u, foot_v = (x1 + x2) / 2.0, y2  # 기본값
+            foot_uv_type = "detected"
+            out_of_fov_info = None
+            keypoints_xy = []
+
+            # Raw keypoints 사용 (IoU 기반 매칭)
+            if raw_keypoints is not None and i in raw_keypoints:
+                kpts = raw_keypoints[i]  # shape: (17, 3) - x, y, conf
+                keypoints_xy = kpts.tolist()
+
+                foot_u, foot_v, foot_uv_type, out_of_fov_info = self._detector._estimate_foot_position(
+                    kpts, x1, y1, x2, y2, img_w, img_h
+                )
 
             detections.append({
                 "id": track_id,
                 "bbox": [x1, y1, x2 - x1, y2 - y1],
                 "score": conf,
                 "class": cls_name,
-                "foot_uv": [foot_u, foot_v],
+                "foot_uv": [float(foot_u), float(foot_v)],
+                "keypoints": keypoints_xy,
+                "foot_uv_type": foot_uv_type,
+                "out_of_fov_info": out_of_fov_info
             })
 
         return detections

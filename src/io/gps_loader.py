@@ -1,6 +1,7 @@
 # GNSS/IMU 로더
-from dataclasses import dataclass
+from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator, Tuple, List
 

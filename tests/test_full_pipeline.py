@@ -11,7 +11,7 @@ from src.io.gps_loader import GpsImuLoader
 from src.calibration.load_calibration_info import CalibrationInfoLoader
 from src.calibration.homography import Homography
 
-from src.tracking.tracker import UltralyticsTracker
+from src.tracking.tracker import ByteTracker
 
 from src.bev.bev_transformer import BevTransformer
 from src.trajectory.ego_motion import EgoMotionCompensator
@@ -66,11 +66,10 @@ def test_full_pipeline():
 
     yolo_cfg = load_yaml("configs/detector/yolo_detector.yaml")
 
-    tracker = UltralyticsTracker(
+    tracker = ByteTracker(
         model_path=yolo_cfg["yolo_model_path"],
         conf_thres_config=yolo_cfg["conf_threshold"],
-        target_class_names=yolo_cfg["target_classes"],
-        tracker_type=yolo_cfg["tracker"]
+        target_class_names=yolo_cfg["target_classes"]
     )
 
     bev_conv = BevTransformer()

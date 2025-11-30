@@ -1,4 +1,5 @@
 # 데이터 입출력, 동기화
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Iterator, Optional, Tuple
@@ -32,7 +33,7 @@ class VideoReader:
 
     def __iter__(self) -> Iterator[Tuple[int, np.ndarray]]:
         frame_idx = 0
-        currnet_frame = 0
+        current_frame = 0
 
         while True:
             ret, frame = self.cap.read()
