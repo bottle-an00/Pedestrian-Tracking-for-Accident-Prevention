@@ -12,7 +12,7 @@ from src.calibration.load_calibration_info import CalibrationInfoLoader
 
 from src.calibration.homography import Homography
 
-from src.tracking.tracker import UltralyticsTracker
+from src.tracking.tracker import ByteTracker
 
 from src.bev.bev_transformer import BevTransformer
 from src.trajectory.ego_motion import EgoMotionCompensator
@@ -51,14 +51,11 @@ def test_tracker():
     yolo_model_path = yolo_cgf["yolo_model_path"]
     conf_threshold  = yolo_cgf["conf_threshold"]
     target_classes  = yolo_cgf["target_classes"]
-    tracker_type    = yolo_cgf["tracker"]
 
-
-    tracker = UltralyticsTracker(
+    tracker = ByteTracker(
         model_path=yolo_model_path,
         conf_thres_config=conf_threshold,
-        target_class_names=target_classes,
-        tracker_type=tracker_type
+        target_class_names=target_classes
     )
 
     bev_converter = BevTransformer()

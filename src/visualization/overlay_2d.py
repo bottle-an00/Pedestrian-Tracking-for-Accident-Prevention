@@ -86,9 +86,10 @@ class Visualizer:
             if 'keypoints' in det and det['keypoints']:
                 kpts = det['keypoints']
 
-                for i, (px, py) in enumerate(kpts):
+                for i, kpt in enumerate(kpts):
                     if i == 15 or i == 16:
                         continue
+                    px, py = kpt[0], kpt[1]
                     if px > 0 and py > 0:
                         cv2.circle(vis_img, (int(px), int(py)), 3, (0, 255, 0), -1)
 

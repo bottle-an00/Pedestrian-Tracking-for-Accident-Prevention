@@ -1,19 +1,16 @@
 # src/tracking/tracker.py
 # ByteTrack 기반 트래킹 모듈
 
-from ultralytics import YOLO
-
 from src.detection.yolo_detector import YoloDetector
 
 
 class ByteTracker:
     """
     YOLO + ByteTrack 기반 트래킹 모듈
-    YoloDetector의 foot 추정 로직을 재사용합니다.
     """
 
     def __init__(self, model_path, conf_thres_config, target_class_names=None, imgsz=640):
-        # YoloDetector 생성 (YOLO 모델 1번만 로드)
+        # YoloDetector 생성
         self._detector = YoloDetector(model_path, conf_thres_config, target_class_names, imgsz)
 
         # detector에서 필요한 속성 참조
@@ -33,7 +30,7 @@ class ByteTracker:
             "score": conf,
             "class": cls_name,
             "foot_uv": [u, v],
-            "keypoints": [[x, y], ...],
+            "keypoints": [[x, y, conf], ...],
             "foot_uv_type": "detected" | "out_of_fov",
             "out_of_fov_info": {...} | None
         }]
@@ -52,7 +49,8 @@ class ByteTracker:
         if results.boxes is None or results.boxes.id is None:
             return []
 
-        has_keypoints = results.keypoints is not None and results.keypoints.data.shape[1] > 0
+        # Raw keypoints 추출
+        raw_keypoints = self._detector._extract_raw_keypoints_matched(img, results)
 
         detections = []
         for i, box in enumerate(results.boxes.data):
@@ -68,15 +66,16 @@ class ByteTracker:
                 if conf < threshold:
                     continue
 
-            # --- 발 위치 추정 로직 (YoloDetector 메서드 재사용) ---
+            # --- 발 위치 추정 로직 ---
             foot_u, foot_v = (x1 + x2) / 2.0, y2  # 기본값
             foot_uv_type = "detected"
             out_of_fov_info = None
             keypoints_xy = []
 
-            if has_keypoints and i < len(results.keypoints.data):
-                kpts = results.keypoints.data[i]
-                keypoints_xy = kpts[:, :2].cpu().numpy().tolist()
+            # Raw keypoints 사용 (IoU 기반 매칭)
+            if raw_keypoints is not None and i in raw_keypoints:
+                kpts = raw_keypoints[i]  # shape: (17, 3) - x, y, conf
+                keypoints_xy = kpts.tolist()
 
                 foot_u, foot_v, foot_uv_type, out_of_fov_info = self._detector._estimate_foot_position(
                     kpts, x1, y1, x2, y2, img_w, img_h
