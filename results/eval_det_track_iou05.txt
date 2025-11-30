@@ -1,0 +1,358 @@
+================================================================================
+EVALUATION RESULTS
+================================================================================
+
+[Metadata]
+  Timestamp: 2025-11-30T23:26:31.194479
+  Model: ./models/yolo/yolo11m-pose.pt
+  Data Root: /media/casey/Casey_Save/차량비전/178.융합센서_다중객체_추적_및_예측데이터/01.데이터/2.Validation
+  Dataset: 13_전방 보행자_val
+  IoU Threshold: 0.5
+  Use Tracking: True
+  Sequences: 11
+  Total Frames: 2200
+
+================================================================================
+[Overall Metrics]
+================================================================================
+
+  [DETECTION]
+    AP@50               : 0.2174
+    AP@75               : 0.1587
+    mAP@50:95           : 0.2064
+    Precision@50        : 0.8748
+    Recall@50           : 0.1963
+    F1@50               : 0.2988
+
+  [TRACKING]
+    HOTA                : 0.2623
+    MOTA                : 0.1465
+    MOTP                : 0.7841
+    IDF1                : 0.2988
+    ID_Switch_total     : 0
+
+  [LOCALIZATION]
+    FootUV_MAE          : 0.0000
+    FootUV_STD          : 0.0000
+    BEV_MAE             : 0.0000
+    BEV_STD             : 0.0000
+
+================================================================================
+[Per-Sequence Summary]
+================================================================================
+Seq      Frames     TP     FP     FN    AP@50    Prec  Recall     MOTA     HOTA   IDS     FootUV
+----------------------------------------------------------------------------------------------------
+003         200      7      0    120   0.0909   1.000   0.055   0.0551   0.0572     0     0.00px
+013         200     12      5    173   0.0909   0.706   0.065   0.0378   0.1900     0     0.00px
+023         200     30      0    107   0.2727   1.000   0.219   0.2190   0.2427     0     0.00px
+033         200     76     16    199   0.2560   0.826   0.276   0.2182   0.2595     0     0.00px
+043         200     37      1    184   0.1818   0.974   0.167   0.1629   0.2127     0     0.00px
+053         200    180      2    267   0.4535   0.989   0.403   0.3982   0.6179     0     0.00px
+063         200    211      1    188   0.5450   0.995   0.529   0.5263   0.6513     0     0.00px
+073         200     17    100    206   0.0455   0.145   0.076  -0.3722   0.1485     0     0.00px
+083         200     76      1    339   0.1818   0.987   0.183   0.1807   0.2106     0     0.00px
+093         200     27      0    165   0.1818   1.000   0.141   0.1406   0.1655     0     0.00px
+103         200     22      0    470   0.0909   1.000   0.045   0.0447   0.1291     0     0.00px
+
+================================================================================
+[Per-Sequence Detail]
+================================================================================
+
+--- 003 (200 frames) ---
+  Detection:
+    Precision@50        : 1.0000
+    Recall@50           : 0.0551
+    F1@50               : 0.1045
+    Precision@75        : 0.4286
+    Recall@75           : 0.0236
+    F1@75               : 0.0448
+    AP@50               : 0.0909
+    AP@75               : 0.0455
+    mAP@50:95           : 0.0478
+    TP                  : 7
+    FP                  : 0
+    FN                  : 120
+    Total_GT            : 127
+  Tracking:
+    HOTA                : 0.0572
+    MOTA                : 0.0551
+    MOTP                : 0.6993
+    IDF1                : 0.1045
+    ID_Switch           : 0
+    TP                  : 7
+    FP                  : 0
+    FN                  : 120
+    Total_GT            : 127
+  Localization:
+
+--- 013 (200 frames) ---
+  Detection:
+    Precision@50        : 0.7059
+    Recall@50           : 0.0649
+    F1@50               : 0.1188
+    Precision@75        : 0.4706
+    Recall@75           : 0.0432
+    F1@75               : 0.0792
+    AP@50               : 0.0909
+    AP@75               : 0.0909
+    mAP@50:95           : 0.0733
+    TP                  : 12
+    FP                  : 5
+    FN                  : 173
+    Total_GT            : 185
+  Tracking:
+    HOTA                : 0.1900
+    MOTA                : 0.0378
+    MOTP                : 0.7845
+    IDF1                : 0.1188
+    ID_Switch           : 0
+    TP                  : 12
+    FP                  : 5
+    FN                  : 173
+    Total_GT            : 185
+  Localization:
+
+--- 023 (200 frames) ---
+  Detection:
+    Precision@50        : 1.0000
+    Recall@50           : 0.2190
+    F1@50               : 0.3593
+    Precision@75        : 0.8333
+    Recall@75           : 0.1825
+    F1@75               : 0.2994
+    AP@50               : 0.2727
+    AP@75               : 0.1591
+    mAP@50:95           : 0.2862
+    TP                  : 30
+    FP                  : 0
+    FN                  : 107
+    Total_GT            : 137
+  Tracking:
+    HOTA                : 0.2427
+    MOTA                : 0.2190
+    MOTP                : 0.8720
+    IDF1                : 0.3593
+    ID_Switch           : 0
+    TP                  : 30
+    FP                  : 0
+    FN                  : 107
+    Total_GT            : 137
+  Localization:
+
+--- 033 (200 frames) ---
+  Detection:
+    Precision@50        : 0.8261
+    Recall@50           : 0.2764
+    F1@50               : 0.4142
+    Precision@75        : 0.4674
+    Recall@75           : 0.1564
+    F1@75               : 0.2343
+    AP@50               : 0.2560
+    AP@75               : 0.1372
+    mAP@50:95           : 0.2518
+    TP                  : 76
+    FP                  : 16
+    FN                  : 199
+    Total_GT            : 275
+  Tracking:
+    HOTA                : 0.2595
+    MOTA                : 0.2182
+    MOTP                : 0.7770
+    IDF1                : 0.4142
+    ID_Switch           : 0
+    TP                  : 76
+    FP                  : 16
+    FN                  : 199
+    Total_GT            : 275
+  Localization:
+
+--- 043 (200 frames) ---
+  Detection:
+    Precision@50        : 0.9737
+    Recall@50           : 0.1674
+    F1@50               : 0.2857
+    Precision@75        : 0.6579
+    Recall@75           : 0.1131
+    F1@75               : 0.1931
+    AP@50               : 0.1818
+    AP@75               : 0.1543
+    mAP@50:95           : 0.1861
+    TP                  : 37
+    FP                  : 1
+    FN                  : 184
+    Total_GT            : 221
+  Tracking:
+    HOTA                : 0.2127
+    MOTA                : 0.1629
+    MOTP                : 0.7967
+    IDF1                : 0.2857
+    ID_Switch           : 0
+    TP                  : 37
+    FP                  : 1
+    FN                  : 184
+    Total_GT            : 221
+  Localization:
+
+--- 053 (200 frames) ---
+  Detection:
+    Precision@50        : 0.9890
+    Recall@50           : 0.4027
+    F1@50               : 0.5723
+    Precision@75        : 0.9396
+    Recall@75           : 0.3826
+    F1@75               : 0.5437
+    AP@50               : 0.4535
+    AP@75               : 0.3624
+    mAP@50:95           : 0.4744
+    TP                  : 180
+    FP                  : 2
+    FN                  : 267
+    Total_GT            : 447
+  Tracking:
+    HOTA                : 0.6179
+    MOTA                : 0.3982
+    MOTP                : 0.8894
+    IDF1                : 0.5723
+    ID_Switch           : 0
+    TP                  : 180
+    FP                  : 2
+    FN                  : 267
+    Total_GT            : 447
+  Localization:
+
+--- 063 (200 frames) ---
+  Detection:
+    Precision@50        : 0.9953
+    Recall@50           : 0.5288
+    F1@50               : 0.6907
+    Precision@75        : 0.8585
+    Recall@75           : 0.4561
+    F1@75               : 0.5957
+    AP@50               : 0.5450
+    AP@75               : 0.4306
+    mAP@50:95           : 0.5152
+    TP                  : 211
+    FP                  : 1
+    FN                  : 188
+    Total_GT            : 399
+  Tracking:
+    HOTA                : 0.6513
+    MOTA                : 0.5263
+    MOTP                : 0.8476
+    IDF1                : 0.6907
+    ID_Switch           : 0
+    TP                  : 211
+    FP                  : 1
+    FN                  : 188
+    Total_GT            : 399
+  Localization:
+
+--- 073 (200 frames) ---
+  Detection:
+    Precision@50        : 0.1453
+    Recall@50           : 0.0762
+    F1@50               : 0.1000
+    Precision@75        : 0.0171
+    Recall@75           : 0.0090
+    F1@75               : 0.0118
+    AP@50               : 0.0455
+    AP@75               : 0.0023
+    mAP@50:95           : 0.0241
+    TP                  : 17
+    FP                  : 100
+    FN                  : 206
+    Total_GT            : 223
+  Tracking:
+    HOTA                : 0.1485
+    MOTA                : -0.3722
+    MOTP                : 0.5980
+    IDF1                : 0.1000
+    ID_Switch           : 0
+    TP                  : 17
+    FP                  : 100
+    FN                  : 206
+    Total_GT            : 223
+  Localization:
+
+--- 083 (200 frames) ---
+  Detection:
+    Precision@50        : 0.9870
+    Recall@50           : 0.1831
+    F1@50               : 0.3089
+    Precision@75        : 0.7403
+    Recall@75           : 0.1373
+    F1@75               : 0.2317
+    AP@50               : 0.1818
+    AP@75               : 0.1602
+    mAP@50:95           : 0.1894
+    TP                  : 76
+    FP                  : 1
+    FN                  : 339
+    Total_GT            : 415
+  Tracking:
+    HOTA                : 0.2106
+    MOTA                : 0.1807
+    MOTP                : 0.7793
+    IDF1                : 0.3089
+    ID_Switch           : 0
+    TP                  : 76
+    FP                  : 1
+    FN                  : 339
+    Total_GT            : 415
+  Localization:
+
+--- 093 (200 frames) ---
+  Detection:
+    Precision@50        : 1.0000
+    Recall@50           : 0.1406
+    F1@50               : 0.2466
+    Precision@75        : 0.8148
+    Recall@75           : 0.1146
+    F1@75               : 0.2009
+    AP@50               : 0.1818
+    AP@75               : 0.1481
+    mAP@50:95           : 0.1735
+    TP                  : 27
+    FP                  : 0
+    FN                  : 165
+    Total_GT            : 192
+  Tracking:
+    HOTA                : 0.1655
+    MOTA                : 0.1406
+    MOTP                : 0.8254
+    IDF1                : 0.2466
+    ID_Switch           : 0
+    TP                  : 27
+    FP                  : 0
+    FN                  : 165
+    Total_GT            : 192
+  Localization:
+
+--- 103 (200 frames) ---
+  Detection:
+    Precision@50        : 1.0000
+    Recall@50           : 0.0447
+    F1@50               : 0.0856
+    Precision@75        : 0.5455
+    Recall@75           : 0.0244
+    F1@75               : 0.0467
+    AP@50               : 0.0909
+    AP@75               : 0.0545
+    mAP@50:95           : 0.0482
+    TP                  : 22
+    FP                  : 0
+    FN                  : 470
+    Total_GT            : 492
+  Tracking:
+    HOTA                : 0.1291
+    MOTA                : 0.0447
+    MOTP                : 0.7554
+    IDF1                : 0.0856
+    ID_Switch           : 0
+    TP                  : 22
+    FP                  : 0
+    FN                  : 470
+    Total_GT            : 492
+  Localization:
+
+================================================================================

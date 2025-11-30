@@ -15,17 +15,25 @@ class Detections_bev:
     foot_bev: tuple
 
 class BevTransformer:
-    def __init__(self):
+    def __init__(self, intrinsics_path: str = None, extrinsics_path: str = None):
+        """
+        BEV 변환기 초기화
 
-        cfg = load_yaml("configs/system.yaml")
+        Args:
+            intrinsics_path: 카메라 내부 파라미터 파일 경로 (calib_Camera0.txt)
+            extrinsics_path: 카메라-라이다 외부 파라미터 파일 경로 (calib_CameraToLidar0.txt)
 
-        intrinsics_path = Path(cfg["test_data_dir"]["calibration"]["calib_Camera"])
-        extrinsics_path = Path(cfg["test_data_dir"]["calibration"]["calib_LiDAR_Camera"])
+        경로가 주어지지 않으면 configs/system.yaml에서 기본값 사용
+        """
+        if intrinsics_path is None or extrinsics_path is None:
+            cfg = load_yaml("configs/system.yaml")
+            intrinsics_path = intrinsics_path or Path(cfg["test_data_dir"]["calibration"]["calib_Camera"])
+            extrinsics_path = extrinsics_path or Path(cfg["test_data_dir"]["calibration"]["calib_LiDAR_Camera"])
 
         calib_loader = CalibrationInfoLoader()
 
-        intrinsics = calib_loader.load_camera_calibration(intrinsics_path)
-        extrinsics = calib_loader.load_camera_extrinsics(extrinsics_path)
+        intrinsics = calib_loader.load_camera_calibration(Path(intrinsics_path))
+        extrinsics = calib_loader.load_camera_extrinsics(Path(extrinsics_path))
 
         self.homography = Homography(intrinsics=intrinsics, extrinsics=extrinsics)
 
