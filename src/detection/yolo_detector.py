@@ -3,7 +3,6 @@
 import torch
 import numpy as np
 from ultralytics import YOLO
-from ultralytics.utils import ops
 from ultralytics.data.augment import LetterBox
 
 
@@ -33,11 +32,23 @@ class YoloDetector:
     # Keypoint confidence threshold (Ultralytics 기본값 0.5 대신 0.3 사용)
     KEYPOINT_CONF_THRESHOLD = 0.3
 
-    def __init__(self, model_path, conf_thres_config, target_class_names=None, imgsz=640):
+    def __init__(self, model_path, conf_thres_config, target_class_names=None, imgsz=640, half=True):
+        """
+        Args:
+            model_path: YOLO 모델 경로
+            conf_thres_config: dict(클래스별) 또는 float(전체)
+            target_class_names: ['person', 'car'] 등
+            imgsz: YOLO 입력 이미지 사이즈
+            half: FP16 사용 여부 (메모리 절약, GPU만 해당)
+        """
         self.model = YOLO(model_path)
         self.names = self.model.names
         self.imgsz = imgsz
         self.conf_thres_config = conf_thres_config
+
+        # GPU 사용 시 half precision 설정 (predict/track 호출 시 적용)
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.half = half and self.device == 'cuda'
 
         # 클래스 인덱스 필터링
         if target_class_names:
@@ -75,7 +86,8 @@ class YoloDetector:
             verbose=False,
             classes=self.target_indices,
             conf=self.min_conf_thres,
-            imgsz=self.imgsz
+            imgsz=self.imgsz,
+            half=self.half,
         )[0]
 
         if results.boxes is None:
@@ -126,12 +138,12 @@ class YoloDetector:
 
         return detections
 
-    def _extract_raw_keypoints_matched(self, img, results):
+    def _extract_raw_keypoints_matched(self, img, results):  # noqa: ARG002 - img kept for API compatibility
         """
-        Raw keypoints 추출 후 results.boxes와 IoU 기반 매칭
+        results.keypoints에서 직접 keypoints 추출 (이중 forward pass 제거)
 
         Ultralytics는 기본적으로 conf < 0.5인 keypoint 좌표를 (0, 0)으로 바꿈.
-        이 메서드는 raw 좌표를 추출하고 bbox와 매칭하여 dict로 반환.
+        낮은 conf 임계값 (0.3) 사용으로 대부분의 keypoint 좌표 사용 가능하도록 변경함.
 
         Returns:
             dict: {box_idx: keypoints_array} 형태
@@ -139,82 +151,18 @@ class YoloDetector:
         if results.keypoints is None or results.boxes is None:
             return None
 
-        img_h, img_w = img.shape[:2]
-
         try:
-            # 이미지 전처리 (LetterBox)
-            img_letterbox = self.letterbox(image=img)
-            lb_h, lb_w = img_letterbox.shape[:2]
-
-            # numpy -> tensor
-            img_tensor = torch.from_numpy(img_letterbox).permute(2, 0, 1).float() / 255.0
-            img_tensor = img_tensor.unsqueeze(0)
-
-            device = next(self.model.model.parameters()).device
-            img_tensor = img_tensor.to(device)
-
-            # Forward pass
-            with torch.no_grad():
-                preds = self.model.model(img_tensor)
-
-            # NMS
-            preds_nms = ops.non_max_suppression(
-                preds,
-                conf_thres=self.min_conf_thres,
-                iou_thres=0.45,
-                nc=len(self.names),
-                max_det=300
-            )
-
-            if len(preds_nms) == 0 or len(preds_nms[0]) == 0:
-                return None
-
-            pred = preds_nms[0]
-
-            # raw bbox 추출 및 스케일링
-            raw_boxes = pred[:, :4].clone()
-            raw_boxes = self._scale_boxes_no_clip((lb_h, lb_w), raw_boxes, (img_h, img_w))
-
-            # keypoints 추출 (pred shape: [num_det, 6 + 17*3])
-            pred_kpts = pred[:, 6:].view(len(pred), 17, 3)
-
-            # Scale coords without clipping
-            raw_kpts = self._scale_coords_no_clip(
-                (lb_h, lb_w),
-                pred_kpts.clone(),
-                (img_h, img_w)
-            )
-
-            raw_boxes_np = raw_boxes.cpu().numpy()
-            raw_kpts_np = raw_kpts.cpu().numpy()
-
-            # results.boxes와 raw_boxes를 IoU 기반 매칭
-            result_boxes = results.boxes.data[:, :4].cpu().numpy()  # x1, y1, x2, y2
+            # 직접 keypoints 데이터 추출 
+            kpts_data = results.keypoints.data.cpu().numpy()
 
             matched = {}
-            for i, res_box in enumerate(result_boxes):
-                best_iou = 0
-                best_idx = -1
-                for j, raw_box in enumerate(raw_boxes_np):
-                    iou = self._compute_iou(res_box, raw_box)
-                    if iou > best_iou:
-                        best_iou = iou
-                        best_idx = j
-
-                if best_iou > 0.5 and best_idx >= 0:
-                    matched[i] = raw_kpts_np[best_idx]
+            for i in range(len(kpts_data)):
+                matched[i] = kpts_data[i]
 
             return matched
 
         except Exception as e:
-            print(f"[WARN] Failed to extract raw keypoints: {e}")
-            # Fallback: 기존 keypoints 사용
-            if results.keypoints is not None:
-                fallback = {}
-                kpts_data = results.keypoints.data.cpu().numpy()
-                for i in range(len(kpts_data)):
-                    fallback[i] = kpts_data[i]
-                return fallback
+            print(f"[WARN] Failed to extract keypoints: {e}")
             return None
 
     def _scale_boxes_no_clip(self, img1_shape, boxes, img0_shape):
@@ -327,7 +275,7 @@ class YoloDetector:
         return foot_u, foot_v, foot_uv_type, out_of_fov_info
 
     def _estimate_foot_from_visible_keypoints(self, kpts, x1, y1, x2, y2, img_w, img_h):
-        """FOV 이탈 시 lowest visible keypoint에서 발목 위치를 추정합니다.
+        """FOV 이탈 시 lowest visible keypoint에서 발목 위치 추정
 
         Args:
             kpts: numpy array of shape (17, 3) - x, y, conf
