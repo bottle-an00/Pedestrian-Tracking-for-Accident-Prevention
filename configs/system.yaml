@@ -15,7 +15,7 @@ test_data_dir:
     calib_LiDAR_Imu: tests/test_data/calib_LidarToImu.txt
     initial_location: tests/test_data/pos_ENU0.txt
 
-dataset_id: "053"
+dataset_id: "043"
 root: data/raw/${dataset_id}
 
 dataset_dir:

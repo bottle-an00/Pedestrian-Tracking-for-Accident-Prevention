@@ -5,7 +5,10 @@ import cv2
 
 class Homography:
 
-    def __init__(self, intrinsics: np.ndarray, extrinsics: np.ndarray):
+    def __init__(self, intrinsics: np.ndarray, extrinsics: np.ndarray, calib_image_size: tuple = None):
+        # calib_image_size: (width, height) of the image used when the intrinsics were calculated.
+        # If provided and the input images use a different resolution, intrinsics will be scaled
+        # automatically when `warp` is called with an image of a different size.
         cfg = load_yaml("configs/system.yaml")
         self.bev_resolution = float(cfg["bev"]["resolution"])
         self.bev_front = float(cfg["bev"]["front"])
@@ -41,6 +44,11 @@ class Homography:
         self._map_y = None
         self._bev_w = None
         self._bev_h = None
+
+        # original calibration image size (width, height) when K was computed
+        self.calib_image_size = calib_image_size
+        # track if intrinsics have been scaled to the current image
+        self._intrinsics_scaled_for = None  # (width, height) or None
 
     def _create_bev_grid(self):
 
@@ -100,8 +108,62 @@ class Homography:
         self._bev_w = bev_w
         self._bev_h = bev_h
 
+    def _scale_intrinsics_for_image(self, image_shape: tuple):
+        """
+        Scale intrinsics if the image resolution differs from the calibration image size.
+
+        image_shape: (height, width) as returned by numpy image.shape[:2]
+        """
+        if self.calib_image_size is None:
+            # no calibration image size provided -> assume intrinsics already match
+            return
+
+        img_h, img_w = image_shape
+        calib_w, calib_h = self.calib_image_size
+
+        # No scaling needed
+        if (img_w, img_h) == (calib_w, calib_h):
+            return
+
+        # Avoid repeated scaling for the same target
+        if self._intrinsics_scaled_for == (img_w, img_h):
+            return
+
+        scale_x = float(img_w) / float(calib_w)
+        scale_y = float(img_h) / float(calib_h)
+
+        # apply scaling to K
+        self.K = self.K.copy()
+        self.K[0, 0] = self.K[0, 0] * scale_x  # fx
+        self.K[1, 1] = self.K[1, 1] * scale_y  # fy
+        self.K[0, 2] = self.K[0, 2] * scale_x  # cx
+        self.K[1, 2] = self.K[1, 2] * scale_y  # cy
+
+        self.fx = self.K[0, 0]
+        self.fy = self.K[1, 1]
+        self.cx = self.K[0, 2]
+        self.cy = self.K[1, 2]
+
+        # Invalidate any precomputed remap so it will be rebuilt with new intrinsics
+        self._map_x = None
+        self._map_y = None
+        self._bev_w = None
+        self._bev_h = None
+
+        self._intrinsics_scaled_for = (img_w, img_h)
+
     def warp(self, image_bgr: np.ndarray,
              border_value=(0, 0, 0)) -> np.ndarray:
+
+        # If the image resolution differs from the calibration resolution, scale intrinsics
+        # before building the remap.
+        if image_bgr is not None:
+            try:
+                img_h, img_w = image_bgr.shape[:2]
+                self._scale_intrinsics_for_image((img_h, img_w))
+            except Exception:
+                # If image shape cannot be determined, proceed with existing intrinsics
+                pass
 
         if self._map_x is None or self._map_y is None:
             self._build_bev_remap()
@@ -157,3 +219,26 @@ class Homography:
         v = self.fy * (Yc / Zc) + self.cy
 
         return int(u), int(v)
+
+    def world_to_bev_index(self, Xw: float, Yw: float) -> tuple:
+        """Convert world coordinates (Xw, Yw) in meters to BEV image indices (row, col).
+
+        Returns (bev_x_idx, bev_y_idx) corresponding to image row, col used by BEV images.
+        """
+        if self._bev_h is None or self._bev_w is None:
+            # ensure remap / grid built
+            self._build_bev_remap()
+
+        res = self.bev_resolution
+
+        # compute column index (bev_y)
+        bev_y = int(np.round(-(Xw + self.bev_y_min) / res))
+
+        # compute row index (bev_x) taking into account vertical flip used in code
+        bev_x = int(np.round((self._bev_h - 1) + (Yw + self.bev_x_min) / res))
+
+        # clamp
+        bev_x = max(0, min(self._bev_h - 1, bev_x))
+        bev_y = max(0, min(self._bev_w - 1, bev_y))
+
+        return bev_x, bev_y
