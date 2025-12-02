@@ -35,15 +35,15 @@ class GpsImuLoader:
 
     def iter_gps_imu_path(self, root_dir: str | Path) -> Iterable[Path]:
         root = Path(root_dir)
-    
+
         if not root.exists():
             raise FileNotFoundError(f"[iter_gps_imu_paths] Directory not found: {root}")
-    
+
         gps_files = sorted(
             [p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in GPS_EXT],
             key=lambda p: int(p.stem)   # ← 숫자 기반 정렬
         )
-    
+
         for p in gps_files:
             yield p
 
