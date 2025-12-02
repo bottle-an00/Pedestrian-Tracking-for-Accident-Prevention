@@ -1,6 +1,7 @@
 # src/tracking/tracker.py
 # ByteTrack 기반 트래킹 모듈
 
+import torch
 from src.detection.yolo_detector import YoloDetector
 
 
@@ -9,9 +10,17 @@ class ByteTracker:
     YOLO + ByteTrack 기반 트래킹 모듈
     """
 
-    def __init__(self, model_path, conf_thres_config, target_class_names=None, imgsz=640):
-        # YoloDetector 생성
-        self._detector = YoloDetector(model_path, conf_thres_config, target_class_names, imgsz)
+    def __init__(self, model_path, conf_thres_config, target_class_names=None, imgsz=640, half=True):
+        """
+        Args:
+            model_path: YOLO 모델 경로
+            conf_thres_config: dict(클래스별) 또는 float(전체)
+            target_class_names: ['person', 'car'] 등
+            imgsz: YOLO 입력 이미지 사이즈
+            half: FP16 사용 여부 (메모리 절약)
+        """
+        # YoloDetector 생성 (half precision 전달)
+        self._detector = YoloDetector(model_path, conf_thres_config, target_class_names, imgsz, half=half)
 
         # detector에서 필요한 속성 참조
         self.model = self._detector.model
@@ -20,6 +29,8 @@ class ByteTracker:
         self.conf_thres_config = self._detector.conf_thres_config
         self.target_indices = self._detector.target_indices
         self.min_conf_thres = self._detector.min_conf_thres
+        self.half = half
+        self.device = self._detector.device
 
     def process(self, img):
         """
@@ -43,7 +54,8 @@ class ByteTracker:
             classes=self.target_indices,
             conf=self.min_conf_thres,
             tracker="bytetrack.yaml",
-            imgsz=self.imgsz
+            imgsz=self.imgsz,
+            half=self.half,
         )[0]
 
         if results.boxes is None or results.boxes.id is None:

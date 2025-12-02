@@ -23,7 +23,9 @@ class BevTransformer:
             self.homography = homography
             return
 
-        cfg = load_yaml("configs/system.yaml")
+        Args:
+            intrinsics_path: 카메라 내부 파라미터 파일 경로 (calib_Camera0.txt)
+            extrinsics_path: 카메라-라이다 외부 파라미터 파일 경로 (calib_CameraToLidar0.txt)
 
         intrinsics_path = (
             Path(intrinsics_path)
