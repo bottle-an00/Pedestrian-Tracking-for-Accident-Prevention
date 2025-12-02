@@ -15,39 +15,12 @@ class Detections_bev:
 
 
 class BevTransformer:
-    def __init__(self, intrinsics_path: str = None, extrinsics_path: str = None,
-                 calib_image_size: tuple = None, homography=None):
+    def __init__(self, homography=None):
+        if homography is None:
+            raise ValueError("Homography must be provided during BevTransformer initialization")
+        
+        self.homography = homography
 
-        # 외부 Homography 인스턴스를 그대로 사용할 경우
-        if homography is not None:
-            self.homography = homography
-            return
-
-        Args:
-            intrinsics_path: 카메라 내부 파라미터 파일 경로 (calib_Camera0.txt)
-            extrinsics_path: 카메라-라이다 외부 파라미터 파일 경로 (calib_CameraToLidar0.txt)
-
-        intrinsics_path = (
-            Path(intrinsics_path)
-            if intrinsics_path else
-            Path(cfg["test_data_dir"]["calibration"]["calib_Camera"])
-        )
-        extrinsics_path = (
-            Path(extrinsics_path)
-            if extrinsics_path else
-            Path(cfg["test_data_dir"]["calibration"]["calib_LiDAR_Camera"])
-        )
-
-        calib_loader = CalibrationInfoLoader()
-        intrinsics = calib_loader.load_camera_calibration(intrinsics_path)
-        extrinsics = calib_loader.load_camera_extrinsics(extrinsics_path)
-
-        # calib_image_size가 주어지면 Intrinsic scaling 활성화
-        self.homography = Homography(
-            intrinsics=intrinsics,
-            extrinsics=extrinsics,
-            calib_image_size=calib_image_size
-        )
 
     def foot_uv_to_foot_bev(self, detections: List[Dict]) -> List[Detections_bev]:
         bev_detections = []
