@@ -62,3 +62,8 @@ runs/
 # -------------------------
 docker/*.pid
 docker/db_data/
+
+# -------------------------
+# Evaluation results
+# -------------------------
+results/
