@@ -32,7 +32,7 @@ dataset_dir:
 
 bev:
   resolution: 0.01      # [m/px]
-  front: 20             # [m]
+  front: 15             # [m]
   back: 0               # [m]
   left: 10              # [m]
   right: 10             # [m]

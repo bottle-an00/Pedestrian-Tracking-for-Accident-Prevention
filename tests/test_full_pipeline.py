@@ -88,7 +88,7 @@ def test_full_pipeline():
     state_manager = PedestrianStateManager(
         obs_len=10,
         max_missing=5,
-        ekf_constructor=lambda: EKFTracker((0.0, 0.0), dt=0.01)
+        ekf_constructor=lambda: EKFTracker((0.0, 0.0), dt=0.1)
     )
 
     # prepare GT frame map for BEV visualization (data/gt/<seq>/image0)
