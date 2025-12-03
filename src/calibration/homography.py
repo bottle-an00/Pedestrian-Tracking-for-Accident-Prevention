@@ -67,7 +67,17 @@ class Homography:
         self._bev_w = None
         self._bev_h = None
 
-        self.calib_image_size = calib_image_size
+        # If calibration image size not provided, infer an approximate size from intrinsics
+        # using principal point (cx, cy). This gives a sensible default for scaling.
+        if calib_image_size is None:
+            try:
+                approx_w = int(round(self.cx * 2.0))
+                approx_h = int(round(self.cy * 2.0))
+                self.calib_image_size = (approx_w, approx_h)
+            except Exception:
+                self.calib_image_size = None
+        else:
+            self.calib_image_size = calib_image_size
         self._intrinsics_scaled_for = None
 
     def _create_bev_grid(self):
@@ -175,14 +185,24 @@ class Homography:
         if self._map_x is None or self._map_y is None:
             self._build_bev_remap()
 
-        diff_x = np.abs(self._map_x - u)
-        diff_y = np.abs(self._map_y - v)
+        # Only consider valid remap cells (map_x/map_y >= 0)
+        valid_mask = (self._map_x >= 0) & (self._map_y >= 0)
+        if not np.any(valid_mask):
+            return -1, -1
 
-        score = diff_x + diff_y
-        bev_x, bev_y = np.unravel_index(np.argmin(score), score.shape)
+        # compute Euclidean distance on valid cells only
+        dx = (self._map_x - float(u))
+        dy = (self._map_y - float(v))
+        dist_sq = dx * dx + dy * dy
 
-        min_score = score[bev_x, bev_y]
-        if min_score > 5:
+        # set invalid cells to a large value so they are ignored by argmin
+        dist_sq[~valid_mask] = 1e12
+
+        bev_x, bev_y = np.unravel_index(np.argmin(dist_sq), dist_sq.shape)
+        min_dist = float(dist_sq[bev_x, bev_y]) ** 0.5
+
+        # threshold (px): if nearest mapped pixel is too far, treat as invalid
+        if min_dist > 10.0:
             return -1, -1
 
         return int(bev_x), int(bev_y)
