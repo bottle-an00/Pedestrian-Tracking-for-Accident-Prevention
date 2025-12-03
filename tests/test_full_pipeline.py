@@ -91,10 +91,43 @@ def test_full_pipeline():
         ekf_constructor=lambda: EKFTracker((0.0, 0.0), dt=0.01)
     )
 
+    # prepare GT frame map for BEV visualization (data/gt/<seq>/image0)
+    from src.evaluation.gt_loader import GTLoader
+    seq_id = Path(image_dir).parent.name
+    gt_dir = Path('data') / 'gt' / seq_id / Path(image_dir).name
+    gt_loader = GTLoader(target_classes=['pedestrian'])
+    gt_frame_map = {}
+    if gt_dir.exists():
+        for p in sorted(gt_dir.glob('*.json')):
+            stem = p.stem
+            # Prefer the filename suffix as the frame index. Example: '13_053_000' -> '000' -> 0
+            fidx = None
+            parts = stem.split('_')
+            if parts and parts[-1].lstrip('0').isdigit():
+                try:
+                    fidx = int(parts[-1])
+                except Exception:
+                    fidx = None
+            # Fallback: if suffix parsing failed, try parsing the whole stem (numeric-only stems)
+            if fidx is None:
+                try:
+                    fidx = int(stem)
+                except Exception:
+                    # unable to determine frame index for this file; skip
+                    continue
+            try:
+                data = gt_loader.load_image_label(p)
+                objs, _ = gt_loader.parse_image_label(data)
+            except Exception:
+                objs = []
+            gt_frame_map[fidx] = objs
+
     img_iter = image_loader.iter_imgs_cv2(image_dir)
     gps_iter = gps_loader.iter_data(gps_dir)
 
     for (img_path, image), (gps_path, gps_data) in zip(img_iter, gps_iter):
+        # per-frame match counter
+        matched_count = 0
         print(f"[Full Pipeline] Processing {img_path.name}")
 
         # YOLO tracking
@@ -308,7 +341,114 @@ def test_full_pipeline():
 
         frame_idx += 1
 
-        cv2.imwrite(str(out_ekf_bev / f"ekf_bev_{img_path.name}"), ekf_bev_img)
+        # Additionally: match current detections to GT and draw matched GT future positions
+        # onto a copy of the EKF BEV image. Also label which detections matched GT.
+        gt_vis = ekf_bev_img.copy()
+        gt_steps = 20  # number of future frames to visualize
+        objs_now = gt_frame_map.get(frame_idx - 1, [])
+
+        # build detection BEV points for matching (use the same foot_bevs produced earlier)
+        det_bev_pts = []
+        for fb in foot_bevs:
+            try:
+                bx, by = fb.foot_bev
+            except Exception:
+                continue
+            det_bev_pts.append({"id": int(fb.id), "bx": float(bx), "by": float(by)})
+
+        # matching threshold in BEV pixels (tune if needed)
+        MATCH_PX = 40.0
+
+        # For each detection, try to find a GT in the same frame within threshold
+        for det in det_bev_pts:
+            best = None
+            bd = float("inf")
+            for gobj in objs_now:
+                if gobj.foot_uv is None:
+                    continue
+                u_gt, v_gt = gobj.foot_uv
+                try:
+                    bx_gt, by_gt = H.pixel_to_bev_warp(u_gt, v_gt)
+                except Exception:
+                    continue
+                if bx_gt < 0 or by_gt < 0:
+                    continue
+                dx = det["bx"] - float(bx_gt)
+                dy = det["by"] - float(by_gt)
+                d = (dx*dx + dy*dy) ** 0.5
+                if d < bd:
+                    bd = d
+                    best = (gobj, bx_gt, by_gt)
+
+            # if a nearby GT was found, draw its future trajectory on gt_vis and label detection
+            if best is not None and bd <= MATCH_PX:
+                gobj, bx_gt, by_gt = best
+                gid = gobj.track_id if gobj.track_id is not None else gobj.instance_id
+                if gid is None:
+                    continue
+
+                # collect future BEV points for this GT by looking up future frames
+                future_pts = []
+                for s in range(gt_steps):
+                    fidx = frame_idx - 1 + s
+                    objs_f = gt_frame_map.get(fidx, [])
+                    match = None
+                    for of in objs_f:
+                        otid = of.track_id if of.track_id is not None else of.instance_id
+                        if otid == gid:
+                            match = of
+                            break
+                    if match is None or match.foot_uv is None:
+                        continue
+                    u, v = match.foot_uv
+                    try:
+                        bx_f, by_f = H.pixel_to_bev_warp(u, v)
+                    except Exception:
+                        bx_f, by_f = -1, -1
+                    if bx_f < 0 or by_f < 0:
+                        continue
+                    future_pts.append((bx_f, by_f))
+
+                # draw GT future on gt_vis
+                if future_pts:
+                    if len(future_pts) == 1:
+                        gt_vis = vis.draw_points(gt_vis, int(gid), [(future_pts[0][0], future_pts[0][1])], radius=4)
+                    else:
+                        gt_vis = vis.draw_polyline(gt_vis, int(gid), future_pts, color=(0, 255, 0), thickness=2)
+
+                # print matched GT future coordinates (BEV pixels)
+                try:
+                    print(f"[GT_VIS] frame={frame_idx-1} det_id={det['id']} gid={gid} future_bev={future_pts}")
+                    # also print pixel_to_world for first few future points for debugging
+                    world_pts = []
+                    for (r_bev, c_bev) in future_pts[:5]:
+                        # convert BEV pixel (row, col) -> image pixel (u,v) then to world meters
+                        try:
+                            u_img, v_img = H.bev_to_pixel(c_bev, r_bev)
+                            x_m, y_m = H.pixel_to_world(float(u_img), float(v_img), flipped=True)
+                            world_pts.append((x_m, y_m))
+                        except Exception:
+                            world_pts.append((None, None))
+                    print(f"[GT_VIS]  sample_world_first5={world_pts}")
+                except Exception:
+                    pass
+
+                # label the matched detection point on GT image (circle + text)
+                try:
+                    # det bx,by are (row, col). cv2 uses (x=col, y=row).
+                    col = int(round(det["by"]))
+                    row = int(round(det["bx"]))
+                    # draw a filled circle and a contrasting border for visibility
+                    cv2.circle(gt_vis, (col, row), 8, (0, 255, 255), -1)
+                    cv2.circle(gt_vis, (col, row), 10, (0, 128, 128), 2)
+                    # put label slightly offset to the top-right
+                    cv2.putText(gt_vis, f"GT:{int(gid)}", (col+12, row-12), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,0), 2, cv2.LINE_AA)
+                    cv2.putText(gt_vis, f"GT:{int(gid)}", (col+12, row-12), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,255), 1, cv2.LINE_AA)
+                except Exception:
+                    pass
+
+        # save original EKF BEV image and GT-overlaid version
+        cv2.imwrite(str(out_ekf_bev / f"ekf_bev_gt_{img_path.name}"), gt_vis)
         cv2.imwrite(str(out_ekf_img / f"ekf_img_{img_path.name}"), ekf_img)
 
     assert True
