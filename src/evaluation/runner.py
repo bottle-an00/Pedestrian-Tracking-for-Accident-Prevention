@@ -573,6 +573,66 @@ class MultiSequenceEvaluator:
 
         return result
 
+    def evaluate_prediction_sequence(
+        self,
+        image_label_dir: Union[str, Path],
+        lidar_label_dir: Union[str, Path],
+        pred_json_dir: Union[str, Path],
+        T: int = 20,
+        distance_threshold: float = 2.0,
+        use_hungarian: bool = False,
+        calibration_dir: Union[str, Path] = None,
+        result: EvaluationResult = None,
+    ) -> Dict:
+        """Evaluate trajectory predictions (ADE/FDE) for a single sequence using pred JSONs.
+
+        Returns aggregated metrics dict produced by the prediction evaluator.
+        """
+        from .prediction_evaluator import evaluate_prediction_sequence as _eval_pred
+
+        # Build bev_transformer from calibration files if a calibration_dir is provided
+        bev = None
+        if calibration_dir is not None:
+            try:
+                from ..calibration.load_calibration_info import CalibrationInfoLoader
+                from ..calibration.homography import Homography
+                calib_dir = Path(calibration_dir)
+                cam_file = calib_dir / 'calib_Camera0.txt'
+                ext_file = calib_dir / 'calib_CameraToLidar0.txt'
+                if cam_file.exists() and ext_file.exists():
+                    loader = CalibrationInfoLoader()
+                    cam = loader.load_camera_calibration(str(cam_file))
+                    ext = loader.load_camera_extrinsics(str(ext_file))
+                    bev = Homography(intrinsics=cam, extrinsics=ext)
+            except Exception:
+                bev = None
+
+        traj_results = _eval_pred(
+            image_label_dir=image_label_dir,
+            lidar_label_dir=lidar_label_dir,
+            pred_json_dir=pred_json_dir,
+            T=T,
+            distance_threshold=distance_threshold,
+            use_hungarian=use_hungarian,
+            bev_transformer=bev,
+        )
+
+        # If an EvaluationResult object was passed, attach trajectory metrics to overall_metrics
+        if result is not None and isinstance(result, EvaluationResult) and traj_results:
+            try:
+                result.overall_metrics['trajectory'] = {
+                    'mean_ADE': float(traj_results.get('mean_ADE', float('nan'))),
+                    'mean_FDE': float(traj_results.get('mean_FDE', float('nan'))),
+                    'min_ADE': float(traj_results.get('min_ADE', float('nan'))),
+                    'max_ADE': float(traj_results.get('max_ADE', float('nan'))),
+                    'min_FDE': float(traj_results.get('min_FDE', float('nan'))),
+                    'max_FDE': float(traj_results.get('max_FDE', float('nan'))),
+                }
+            except Exception:
+                pass
+
+        return traj_results
+
     def _compute_overall_metrics(self, sequences: Dict[str, SequenceResult]) -> Dict[str, Dict]:
         """시퀀스별 메트릭 평균 계산"""
         if not sequences:

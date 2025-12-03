@@ -90,7 +90,24 @@ class Visualizer:
             if 'keypoints' in det and det['keypoints']:
                 kpts = det['keypoints']
 
-                for i, (px, py) in enumerate(kpts):
+                # Normalize keypoints into list of (x,y) pairs. Input may be
+                # a flat list [x1,y1,x2,y2,...] or a list of lists/tuples where
+                # elements may contain additional values (e.g., score).
+                norm_kpts = []
+                if kpts and isinstance(kpts[0], (list, tuple)):
+                    for kp in kpts:
+                        try:
+                            norm_kpts.append((float(kp[0]), float(kp[1])))
+                        except Exception:
+                            norm_kpts.append((0.0, 0.0))
+                else:
+                    for i in range(0, len(kpts), 2):
+                        try:
+                            norm_kpts.append((float(kpts[i]), float(kpts[i+1])))
+                        except Exception:
+                            norm_kpts.append((0.0, 0.0))
+
+                for i, (px, py) in enumerate(norm_kpts):
                     if i in (15, 16):  # ankles handled separately
                         continue
                     if px > 0 and py > 0:
@@ -98,14 +115,17 @@ class Visualizer:
                                    (0, 255, 0), -1)
 
                 for p1, p2 in self.SKELETON:
-                    a, b = kpts[p1 - 1], kpts[p2 - 1]
+                    # skeleton indices are 1-indexed in SKELETON
+                    a = norm_kpts[p1 - 1] if p1 - 1 < len(norm_kpts) else (0, 0)
+                    b = norm_kpts[p2 - 1] if p2 - 1 < len(norm_kpts) else (0, 0)
                     if a[0] > 0 and a[1] > 0 and b[0] > 0 and b[1] > 0:
                         cv2.line(vis_img, (int(a[0]), int(a[1])),
                                  (int(b[0]), int(b[1])),
                                  (255, 255, 0), 1)
 
-                # Ankles (highlight)
-                la, ra = kpts[15], kpts[16]
+                # Ankles (highlight) indices 15 and 16 (1-indexed in SKELETON)
+                la = norm_kpts[15] if 15 < len(norm_kpts) else (0, 0)
+                ra = norm_kpts[16] if 16 < len(norm_kpts) else (0, 0)
                 if la[0] > 0 and la[1] > 0:
                     cv2.circle(vis_img, (int(la[0]), int(la[1])),
                                5, (0, 255, 255), -1)

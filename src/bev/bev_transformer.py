@@ -18,7 +18,7 @@ class BevTransformer:
     def __init__(self, homography=None):
         if homography is None:
             raise ValueError("Homography must be provided during BevTransformer initialization")
-        
+
         self.homography = homography
 
 

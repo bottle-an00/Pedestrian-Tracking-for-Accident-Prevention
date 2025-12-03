@@ -8,6 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.evaluation import MultiSequenceEvaluator
+from src.calibration.load_calibration_info import CalibrationInfoLoader
+from src.calibration.homography import Homography
 
 
 def main():
@@ -23,6 +25,8 @@ def main():
     parser.add_argument("--iou-threshold", type=float, default=0.3)
     parser.add_argument("--use-tracking", action="store_true")
     parser.add_argument("--output", type=str, default="results/eval_result.pkl")
+    parser.add_argument("--pred-json-dir", type=str, default=None,
+                        help="Directory containing prediction JSON files for trajectory evaluation")
 
     args = parser.parse_args()
 
@@ -40,8 +44,37 @@ def main():
             image_dir=args.image_dir,
             image_label_dir=args.image_label_dir,
         )
+        # If pred JSONs provided, run trajectory ADE/FDE evaluation for this single sequence
+        traj_results = None
+        if args.pred_json_dir:
+                seq_path = Path(args.image_dir).parent
+                traj_results = evaluator.evaluate_prediction_sequence(
+                    image_label_dir=args.image_label_dir,
+                    lidar_label_dir=args.lidar_label_dir,
+                    pred_json_dir=args.pred_json_dir,
+                    T=20,
+                    distance_threshold=2.0,
+                    use_hungarian=False,
+                    calibration_dir=seq_path,
+                    result=result,
+                )
     else:
         parser.error("Either --data-root or (--image-dir and --image-label-dir) required")
+
+    # If trajectory results were computed, attach them to overall_metrics so the
+    # saved text log includes ADE/FDE summary.
+    try:
+        if 'traj_results' in locals() and traj_results:
+            result.overall_metrics['trajectory'] = {
+                'mean_ADE': float(traj_results.get('mean_ADE', float('nan'))),
+                'mean_FDE': float(traj_results.get('mean_FDE', float('nan'))),
+                'min_ADE': float(traj_results.get('min_ADE', float('nan'))),
+                'max_ADE': float(traj_results.get('max_ADE', float('nan'))),
+                'min_FDE': float(traj_results.get('min_FDE', float('nan'))),
+                'max_FDE': float(traj_results.get('max_FDE', float('nan'))),
+            }
+    except Exception:
+        pass
 
     result.save(args.output)
 
@@ -55,6 +88,18 @@ def main():
     print(f"Detection:  AP@50={det.get('AP@50', 0):.4f}  Recall={det.get('Recall@50', 0):.4f}  Precision={det.get('Precision@50', 0):.4f}")
     print(f"Tracking:   HOTA={trk.get('HOTA', 0):.4f}   MOTA={trk.get('MOTA', 0):.4f}    IDS={trk.get('ID_Switch_total', 0)}")
     print(f"{'='*60}")
+    # Trajectory summary (if computed)
+    try:
+        if 'traj_results' in locals() and traj_results:
+            mean_ADE = traj_results.get('mean_ADE')
+            mean_FDE = traj_results.get('mean_FDE')
+            if mean_ADE is not None and mean_FDE is not None:
+                print(f"Trajectory: mean_ADE={mean_ADE:.4f}  mean_FDE={mean_FDE:.4f}")
+            else:
+                print("Trajectory: No valid ADE/FDE samples collected.")
+    except Exception:
+        pass
+
     print(f"Results saved: {args.output}")
 
 
