@@ -104,42 +104,7 @@ def evaluate_prediction_sequence(
 
                 pred_objects.append({'id': int(obj.get('id', -1)), 'pos': (x, y), 'future': future_list})
 
-        # load GT from image labels (convert image bbox bottom-center -> BEV pixel -> BEV-world)
-        gt_objects = []
-        if image_label_dir and Path(image_label_dir).exists() and homography is not None:
-            img_label_path = Path(image_label_dir) / f"{frame_idx}.json"
-            if not img_label_path.exists():
-                pattern = f"*_{frame_idx:03d}.json"
-                matches = sorted(Path(image_label_dir).glob(pattern))
-                img_label_path = matches[0] if matches else None
-
-            if img_label_path and Path(img_label_path).exists():
-                try:
-                    image_data = gt_loader.load_image_label(img_label_path)
-                    image_objs, _ = gt_loader.parse_image_label(image_data)
-                    for img_obj in image_objs:
-                        if img_obj.foot_uv is None:
-                            continue
-                        u, v = img_obj.foot_uv
-                        # Prefer direct image pixel -> world conversion if available (avoids BEV warp discretization)
-                        try:
-                            if hasattr(homography, 'image_pixel_to_world'):
-                                x_m, y_m = homography.image_pixel_to_world(u, v)
-                            else:
-                                bev_px, bev_py = homography.pixel_to_bev_warp(u, v)
-                                if bev_px < 0 or bev_py < 0:
-                                    continue
-                                x_m, y_m = homography.pixel_to_world(float(bev_py), float(bev_px), flipped=True)
-                        except Exception:
-                            continue
-                        obj_id = img_obj.track_id if img_obj.track_id is not None else img_obj.instance_id
-                        gt_objects.append({'id': int(obj_id) if obj_id is not None else -1, 'pos': (float(x_m), float(y_m))})
-                except Exception:
-                    gt_objects = []
-        else:
-            gt_objects = []
-
-        # convert pred BEV pixels if necessary
+        # convert pred BEV pixels if necessary (only when pred_in_bev_pixels=True)
         if pred_in_bev_pixels and homography is not None:
             converted_preds = []
             for p in pred_objects:
@@ -158,6 +123,37 @@ def evaluate_prediction_sequence(
                     future_world.append((fx_m, fy_m))
                 converted_preds.append({'id': p['id'], 'pos': (x_m, y_m), 'future': future_world})
             pred_objects = converted_preds
+
+        # load GT from image labels (convert image bbox bottom-center -> BEV local meters via bev warp)
+        gt_objects = []
+        if image_label_dir and Path(image_label_dir).exists() and homography is not None:
+            img_label_path = Path(image_label_dir) / f"{frame_idx}.json"
+            if not img_label_path.exists():
+                pattern = f"*_{frame_idx:03d}.json"
+                matches = sorted(Path(image_label_dir).glob(pattern))
+                img_label_path = matches[0] if matches else None
+
+            if img_label_path and Path(img_label_path).exists():
+                try:
+                    image_data = gt_loader.load_image_label(img_label_path)
+                    image_objs, _ = gt_loader.parse_image_label(image_data)
+                    for img_obj in image_objs:
+                        if img_obj.foot_uv is None:
+                            continue
+                        u, v = img_obj.foot_uv
+                        try:
+                            bev_px, bev_py = homography.pixel_to_bev_warp(u, v)
+                            if bev_px < 0 or bev_py < 0:
+                                continue
+                            x_m, y_m = homography.pixel_to_world(float(bev_py), float(bev_px), flipped=True)
+                        except Exception:
+                            continue
+                        obj_id = img_obj.track_id if img_obj.track_id is not None else img_obj.instance_id
+                        gt_objects.append({'id': int(obj_id) if obj_id is not None else -1, 'pos': (float(x_m), float(y_m))})
+                except Exception:
+                    gt_objects = []
+        else:
+            gt_objects = []
 
         preds_per_frame.append(pred_objects)
         gts_per_frame.append(gt_objects)
