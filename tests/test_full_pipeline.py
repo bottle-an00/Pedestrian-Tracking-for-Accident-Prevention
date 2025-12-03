@@ -37,6 +37,7 @@ def test_full_pipeline():
     out_bev_result = out_root / "bev_result"
     out_img_traj = out_root / "img_trajectory"
     out_tracking = out_root / "tracking"
+    out_detection = out_root / "detection"
     out_ekf_bev = out_root / "ekf_bev"
     out_ekf_img = out_root / "ekf_img"
     out_bev_risk = out_root / "bev_risk"
@@ -44,6 +45,9 @@ def test_full_pipeline():
 
     for p in [out_bev_traj, out_bev_result, out_img_traj, out_tracking, out_ekf_bev, out_ekf_img, out_bev_risk]:
         p.mkdir(parents=True, exist_ok=True)
+
+    # detection outputs should mirror `src/app/main.py` behavior
+    out_detection.mkdir(parents=True, exist_ok=True)
 
     out_bev_debug.mkdir(parents=True, exist_ok=True)
 
@@ -69,7 +73,8 @@ def test_full_pipeline():
     tracker = ByteTracker(
         model_path=yolo_cfg["yolo_model_path"],
         conf_thres_config=yolo_cfg["conf_threshold"],
-        target_class_names=yolo_cfg["target_classes"]
+        target_class_names=yolo_cfg["target_classes"],
+        imgsz=yolo_cfg.get("imgsz", 1280)
     )
 
     bev_conv = BevTransformer(homography=H)
@@ -94,8 +99,12 @@ def test_full_pipeline():
 
         # YOLO tracking
         detections = tracker.process(image)
-        img_tracking = vis.draw_on_img(image.copy(), detections)
-        cv2.imwrite(str(out_tracking / f"track_{img_path.name}"), img_tracking)
+        img_tracking = vis.draw_on_img_with_keypoints(
+            image.copy(), detections, seq_name=Path(image_dir).parent.name
+        )
+
+        # Save to outputs/detection/ with same filename pattern used in main
+        cv2.imwrite(str(out_detection / f"det_{img_path.name}"), img_tracking)
 
         # Image to BEV
         bev_img = H.warp(image)
