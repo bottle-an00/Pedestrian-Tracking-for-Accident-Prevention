@@ -26,11 +26,29 @@ class TrackState:
 
         # update EKF with the new measurement if EKF supports update()
         try:
-            self.ekf.update(self.position)
+            # Prefer update(pos, dt) signature if available
+            if hasattr(self.ekf, 'update'):
+                try:
+                    # attempt to pass frame-aligned dt if caller set it on TrackState
+                    if hasattr(self, 'dt'):
+                        # some EKF implementations accept (z, dt)
+                        self.ekf.update(self.position, getattr(self, 'dt'))
+                    else:
+                        self.ekf.update(self.position)
+                except TypeError:
+                    # fallback: update(pos) only
+                    self.ekf.update(self.position)
         except Exception:
             # EKF may expect a numpy array or different API; try converting
             try:
-                self.ekf.update(np.asarray(self.position, dtype=np.float32))
+                if hasattr(self.ekf, 'update'):
+                    try:
+                        if hasattr(self, 'dt'):
+                            self.ekf.update(np.asarray(self.position, dtype=np.float32), getattr(self, 'dt'))
+                        else:
+                            self.ekf.update(np.asarray(self.position, dtype=np.float32))
+                    except TypeError:
+                        self.ekf.update(np.asarray(self.position, dtype=np.float32))
             except Exception:
                 # If EKF has different API, ignore here; user-supplied ekf_constructor
                 # should provide an object compatible with .update() and .predict_future().
@@ -114,6 +132,21 @@ class PedestrianStateManager:
         to_remove = []
         for tid, ts in list(self.active_tracks.items()):
             if tid not in seen_ids:
+                # advance EKF state for missing detection by calling predict(dt) if available
+                try:
+                    if ts.ekf is not None and hasattr(ts.ekf, 'predict'):
+                        # use manager dt if available
+                        try:
+                            ts.ekf.predict(dt=self.dt)
+                        except TypeError:
+                            # some predict() accept single positional dt
+                            try:
+                                ts.ekf.predict(self.dt)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
                 ts.update_missing()
                 if ts.missing_count > self.max_missing:
                     to_remove.append(tid)

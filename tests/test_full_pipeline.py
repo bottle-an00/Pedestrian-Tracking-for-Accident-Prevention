@@ -15,7 +15,7 @@ from src.tracking.tracker import ByteTracker
 
 from src.bev.bev_transformer import BevTransformer, Detections_bev
 import json
-from src.trajectory.ego_motion import EgoMotionCompensator
+# ego-motion compensation intentionally removed for this test
 from src.trajectory.trajectory_manager import TrajectoryBuffer
 
 from src.trajectory.ekf_manager import EKFManager
@@ -53,6 +53,9 @@ def test_full_pipeline():
 
     frame_idx = 0
 
+    # recorder for per-id detections: { id: [ {frame, time, x_m, y_m}, ... ] }
+    detections_by_id = {}
+
     calib_loader = CalibrationInfoLoader()
 
     intrinsics = calib_loader.load_camera_calibration(
@@ -78,17 +81,19 @@ def test_full_pipeline():
     )
 
     bev_conv = BevTransformer(homography=H)
-    ego_comp = EgoMotionCompensator()
     trajectory_buffer = TrajectoryBuffer(max_length=100)
     ekf_manager = EKFManager()
     # PedestrianStateManager holds per-track EKF state and history for forecasting.
     # Set eval_mode=True when you want per-frame prediction JSONs to be saved.
     eval_mode = True
 
+    # Use the improved Constant-Velocity EKF tracker (EKFTrackerCV) via EKFManager-compatible constructor
+    from src.trajectory.ekf_tracker_cv import EKFTrackerCV
+
     state_manager = PedestrianStateManager(
         obs_len=10,
         max_missing=5,
-        ekf_constructor=lambda: EKFTracker((0.0, 0.0), dt=0.1)
+        ekf_constructor=lambda: EKFTrackerCV(initial_pos=(0.0, 0.0), initial_vel=(0.0, 0.0), dt=0.1, sigma_meas=0.4, debug=False)
     )
 
     # prepare GT frame map for BEV visualization (data/gt/<seq>/image0)
@@ -176,10 +181,23 @@ def test_full_pipeline():
         )
         cv2.imwrite(str(out_bev_risk / f"bev_risk_{img_path.name}"), bev_risk_img)
 
-        # Ego-motion compensation & trajectory update
-        # compensate using meter coordinates (local) -> returns global world coords
-        compensated = ego_comp.compensate(foot_bevs_m, gps_data)
+        # Trajectory update WITHOUT ego-motion compensation: keep local vehicle-frame coords
+        compensated = foot_bevs_m
         trajectory_buffer.add(compensated, gps_data.time)
+
+        # Record each detection's local position (vehicle-frame meters) by id
+        for fbm in foot_bevs_m:
+            try:
+                tid = int(fbm.id)
+                x_m, y_m = float(fbm.foot_bev[0]), float(fbm.foot_bev[1])
+            except Exception:
+                continue
+            detections_by_id.setdefault(tid, []).append({
+                "frame": int(frame_idx),
+                "time": float(gps_data.time),
+                "x_m": x_m,
+                "y_m": y_m
+            })
 
         # Update PedestrianStateManager with local (vehicle-frame) detections
         # Note: use the local world coords (foot_bevs_m) before ego compensation
@@ -195,11 +213,11 @@ def test_full_pipeline():
         # Trajectory to BEV image
         bev_traj_img = bev_img.copy()
         for tid, traj in trajectory_buffer.get_all().items():
-            world_traj = ego_comp.inv_compensate_all(traj, gps_data)
+            # traj already in local vehicle-frame meters (no ego compensation)
             bev_traj_img = vis.draw_on_BEV(
                 bev_traj_img,
                 tid,
-                [p.foot_bev for p in world_traj]
+                [p.foot_bev for p in traj]
             )
 
         cv2.imwrite(str(out_bev_traj / f"bev_traj_{img_path.name}"), bev_traj_img)
@@ -207,8 +225,8 @@ def test_full_pipeline():
         # Trajectory to original image
         img_traj = image.copy()
         for tid, traj in trajectory_buffer.get_all().items():
-            world_traj = ego_comp.inv_compensate_all(traj, gps_data)
-            uv_list = bev_conv.foot_bev_to_foot_uv([p.foot_bev for p in world_traj])
+            # traj already in local vehicle-frame meters (no ego compensation)
+            uv_list = bev_conv.foot_bev_to_foot_uv([p.foot_bev for p in traj])
 
             img_traj = vis.draw_on_img(
                 img_traj,
@@ -240,12 +258,8 @@ def test_full_pipeline():
             if xy is None:
                 continue
 
-            # xy is world-meter coordinate (x_m, y_m) in global frame
-            x_m, y_m = float(xy[0]), float(xy[1])
-
-            # Convert global EKF prediction back to vehicle-local (BEV) coordinates
-            local_xy = ego_comp.inv_compensate_list((x_m, y_m), gps_data)
-            lx, ly = float(local_xy[0]), float(local_xy[1])
+            # xy is in local vehicle-frame meters (no ego compensation)
+            lx, ly = float(xy[0]), float(xy[1])
 
             # local -> BEV image pixel (u: col, v: row)
             u_bev, v_bev = H.world_to_bev_img_pixel(lx, ly, flipped=True)
@@ -270,11 +284,8 @@ def test_full_pipeline():
             bev_future_pts = []
             img_uvs = []
             for p in future:
-                x_m, y_m = float(p[0]), float(p[1])
-
-                # convert global EKF future prediction back to vehicle-local (BEV) coordinates
-                local_xy = ego_comp.inv_compensate_list((x_m, y_m), gps_data)
-                lx, ly = float(local_xy[0]), float(local_xy[1])
+                # p is in local vehicle-frame meters (no ego compensation)
+                lx, ly = float(p[0]), float(p[1])
 
                 # local -> BEV image pixel (u: col, v: row)
                 u_bev, v_bev = H.world_to_bev_img_pixel(lx, ly, flipped=True)
@@ -326,9 +337,8 @@ def test_full_pipeline():
             x_m, y_m = float(xy[0]), float(xy[1])
             debug_entry["ekf_pred_world"].append({"id": int(tid), "x_m": x_m, "y_m": y_m})
 
-            # also compute local (vehicle frame) EKF prediction and its BEV pixel
-            local_xy = ego_comp.inv_compensate_list((x_m, y_m), gps_data)
-            lx, ly = float(local_xy[0]), float(local_xy[1])
+            # xy is already local (vehicle-frame) meters
+            lx, ly = x_m, y_m
             debug_entry["ekf_pred_local"] = debug_entry.get("ekf_pred_local", [])
             debug_entry["ekf_pred_local"].append({"id": int(tid), "x_m": lx, "y_m": ly})
 
@@ -452,3 +462,12 @@ def test_full_pipeline():
         cv2.imwrite(str(out_ekf_img / f"ekf_img_{img_path.name}"), ekf_img)
 
     assert True
+
+    # After processing all frames, save the per-id detection traces to JSON
+    detections_out_path = out_root / "detections_by_id.json"
+    try:
+        with open(detections_out_path, "w") as jf:
+            json.dump(detections_by_id, jf, indent=2)
+        print(f"Saved detections_by_id JSON to: {detections_out_path}")
+    except Exception as e:
+        print(f"Failed to save detections_by_id JSON: {e}")
