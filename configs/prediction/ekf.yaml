@@ -1,1 +1,47 @@
-# EKF 노이즈/파라미터
+# ==================================================
+# EKF Configuration for Pedestrian Tracking in BEV
+# ==================================================
+# This configuration is for a 2D Constant Velocity (CV) model
+# in BEV local coordinates [m].
+#
+# State: x = [X, Y, Vx, Vy]^T
+# - X, Y: position in BEV local frame [m]
+# - Vx, Vy: velocity in BEV local frame [m/s]
+
+# Process noise parameter (white acceleration model)
+# sigma_a: standard deviation of acceleration noise [m/s^2]
+# Typical range: 1.0 ~ 5.0
+# - Higher values allow faster adaptation but may be noisier
+# - Lower values give smoother tracking but slower adaptation
+sigma_a: 3.0
+
+# Measurement noise parameter
+# sigma_meas: standard deviation of position measurement noise [m]
+# Typical range: 0.05 ~ 0.5
+# - Depends on BEV pixel resolution and detection accuracy
+# - Higher values trust measurements less, rely more on prediction
+sigma_meas: 0.1
+
+# Distance-dependent measurement noise (optional)
+# If enabled, measurement uncertainty increases with distance
+use_distance_dependent_R: false
+distance_R_alpha: 0.05  # R_eff = R * (1 + alpha * range)
+
+# Initial state covariance parameters
+# sigma_pos_init: initial position uncertainty [m]
+# sigma_vel_init: initial velocity uncertainty [m/s]
+sigma_pos_init: 0.2
+sigma_vel_init: 1.0
+
+# Default time step [s]
+# Used when timestamps are not available
+default_dt: 0.1
+
+# Velocity initialization settings
+# min_history_for_vel_init: minimum number of past positions needed
+# to estimate initial velocity (1 means use last 2 positions)
+min_history_for_vel_init: 1
+max_history_for_vel_init: 5  # use up to 5 recent positions for averaging
+
+# Debug/logging
+enable_debug_logging: false
