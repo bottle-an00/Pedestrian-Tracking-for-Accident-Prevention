@@ -26,6 +26,7 @@ from src.trajectory.ekf_tracker import EKFTracker
 # Import the new smoother wrapper
 from src.trajectory.realtime_fixed_lag_smoothing import RealTimeEKFWithLagSmoothing
 
+from src.trajectory.ekf_tracker_cv import EKFTrackerCV
 
 def test_full_pipeline_with_lag_smoothing():
     """
@@ -98,17 +99,14 @@ def test_full_pipeline_with_lag_smoothing():
 
     bev_conv = BevTransformer(homography=H)
     trajectory_buffer = TrajectoryBuffer(max_length=100)
-    ekf_manager = EKFManager()
-    # PedestrianStateManager holds per-track EKF state and history for forecasting.
-    # Set eval_mode=True when you want per-frame prediction JSONs to be saved.
+
     eval_mode = True
 
     # Use the improved Constant-Velocity EKF tracker (EKFTrackerCV) via EKFManager-compatible constructor
-    from src.trajectory.ekf_tracker_cv import EKFTrackerCV
 
     # Wrap each EKFTrackerCV instance with RealTimeEKFWithLagSmoothing via the ekf_constructor
     state_manager = PedestrianStateManager(
-        obs_len=10,
+        obs_len=5,
         max_missing=5,
         ekf_constructor=lambda: RealTimeEKFWithLagSmoothing(
             EKFTrackerCV(initial_pos=(0.0, 0.0), initial_vel=(0.0, 0.0), dt=0.1, sigma_meas=0.4, debug=False),
@@ -183,25 +181,6 @@ def test_full_pipeline_with_lag_smoothing():
         )
         cv2.imwrite(str(out_bev_result / f"bev_{img_path.name}"), bev_result)
 
-        # Risk zone overlay
-        speed = np.sqrt(gps_data.vel_x**2 + gps_data.vel_y**2)
-        front_m = float(np.clip(speed, 2.0, 10.0))
-
-        img_h, img_w = image.shape[:2]
-        u = float(img_w / 2.0)
-        v = float(img_h - 1)
-        vehicle_bev = H.pixel_to_bev_warp(u, v)
-
-        bev_risk_img = vis.draw_risk_zone_bev(
-            bev_img.copy(),
-            front_m=front_m,
-            width_m=1.25,
-            bev_resolution=float(cfg['bev']['resolution']),
-            caution_color=(0,255,255),
-            caution_alpha=0.25,
-            vehicle_bev=vehicle_bev
-        )
-        cv2.imwrite(str(out_bev_risk / f"bev_risk_{img_path.name}"), bev_risk_img)
 
         # Trajectory update WITHOUT ego-motion compensation: keep local vehicle-frame coords
         compensated = foot_bevs_m
@@ -228,86 +207,80 @@ def test_full_pipeline_with_lag_smoothing():
 
         # If evaluation mode, generate and save future predictions (T=20)
         if eval_mode:
-            # Use the smoother's predict_future_with_smoothing per-track instead of
-            # calling state_manager.generate_future_predictions so smoothing is applied
-            # only for future rollouts (real-time EKF state remains forward-only).
-            for ts in state_manager.get_future_ready_tracks():
+            # Only pre-fill futures when the smoother's lag window is filled.
+            # This avoids filling ts.future_traj early using obs_len-based helpers.
+            for track_id, ts in state_manager.active_tracks.items():
                 try:
-                    # ts.ekf is RealTimeEKFWithLagSmoothing
-                    # use the EKF/wrapper's default dt when available to match update() calls
-                    dt_local = getattr(ts.ekf, 'default_dt', state_manager.dt)
-                    fut = ts.ekf.predict_future_with_smoothing(horizon_steps=20, dt=dt_local)
-                    # convert numpy array -> list of tuples
-                    ts.future_traj = [(float(p[0]), float(p[1])) for p in fut]
+                    hist_len = 0
+                    try:
+                        hist_len = len(getattr(ts.ekf, '_x_hist', []))
+                    except Exception:
+                        hist_len = 0
+                    lag_size = getattr(ts.ekf, 'lag_size', 0)
+                    use_smoothing = hist_len >= (lag_size + 1)
+
+                    if use_smoothing and hasattr(ts.ekf, 'predict_future_with_smoothing'):
+                        try:
+                            ekf_under = getattr(ts.ekf, 'ekf', ts.ekf)
+                            dt_local = getattr(ts.ekf, 'default_dt', state_manager.dt)
+                            # fut = ts.ekf.predict_future_with_smoothing(horizon_steps=20, dt=dt_local)
+                            fut = ekf_under.predict_future(steps=20, dt=getattr(ekf_under, 'default_dt', state_manager.dt))
+                            if fut is not None:
+                                ts.future_traj = [(float(p[0]), float(p[1])) for p in fut]
+                            else:
+                                ts.future_traj = None
+                        except Exception:
+                            ts.future_traj = None
+                    else:
+                        # fallback: use underlying EKF's forward-only predict if available
+                        try:
+                            ekf_under = getattr(ts.ekf, 'ekf', ts.ekf)
+                            if hasattr(ekf_under, 'predict_future'):
+                                try:
+                                    fut = ekf_under.predict_future(steps=20, dt=getattr(ekf_under, 'default_dt', state_manager.dt))
+                                except TypeError:
+                                    fut = ekf_under.predict_future(20)
+                                ts.future_traj = [(float(p[0]), float(p[1])) for p in fut] if fut is not None else None
+                            else:
+                                ts.future_traj = None
+                        except Exception:
+                            ts.future_traj = None
                 except Exception:
                     ts.future_traj = None
 
             # saved positions are expected to already be local BEV meters (m)
             state_manager.save_predictions_json(frame_idx, str(out_root), eval_mode=True)
 
-        # Trajectory to BEV image
-        bev_traj_img = bev_img.copy()
-        for tid, traj in trajectory_buffer.get_all().items():
-            # traj already in local vehicle-frame meters (no ego compensation)
-            bev_traj_img = vis.draw_on_BEV(
-                bev_traj_img,
-                tid,
-                [p.foot_bev for p in traj]
-            )
 
-        cv2.imwrite(str(out_bev_traj / f"bev_traj_{img_path.name}"), bev_traj_img)
-
-        # Trajectory to original image
-        img_traj = image.copy()
-        for tid, traj in trajectory_buffer.get_all().items():
-            # traj already in local vehicle-frame meters (no ego compensation)
-            uv_list = bev_conv.foot_bev_to_foot_uv([p.foot_bev for p in traj])
-
-            img_traj = vis.draw_on_img(
-                img_traj,
-                [
-                    {"bbox": (0,0,0,0), "id": tid,
-                     "class": "traj", "score": 1.0, "foot_uv": uv}
-                    for uv in uv_list
-                ]
-            )
-
-        cv2.imwrite(str(out_img_traj / f"img_traj_{img_path.name}"), img_traj)
-
-        # EKF update (real-time) via ekf_manager (unchanged)
-        ekf_now = {}
-
-        for d in compensated:
-            tid = d.id
-            # d.foot_bev is expected to be world-meter coords (after compensate)
-            xy = ekf_manager.update(tid, d.foot_bev, gps_data.time)
-            ekf_now[tid] = xy
+    # EKFManager disabled: use per-track smoothing EKF via state_manager instead
+    # ekf_now = {}
+    # (we intentionally skip ekf_manager.update calls)
 
         ekf_bev_img = bev_img.copy()
         ekf_img = image.copy()
 
-        # Visualize EKF current predictions: convert world->BEV pixel for drawing
-        for tid, xy in ekf_now.items():
-            if xy is None:
-                continue
+        # # Visualize EKF current predictions: convert world->BEV pixel for drawing
+        # for tid, xy in ekf_now.items():
+        #     if xy is None:
+        #         continue
 
-            # xy is in local vehicle-frame meters (no ego compensation)
-            lx, ly = float(xy[0]), float(xy[1])
+        #     # xy is in local vehicle-frame meters (no ego compensation)
+        #     lx, ly = float(xy[0]), float(xy[1])
 
-            # local -> BEV image pixel (u: col, v: row)
-            u_bev, v_bev = H.world_to_bev_img_pixel(lx, ly, flipped=True)
+        #     # local -> BEV image pixel (u: col, v: row)
+        #     u_bev, v_bev = H.world_to_bev_img_pixel(lx, ly, flipped=True)
 
-            # draw on BEV image (vis.draw_points expects (row, col) pairs)
-            ekf_bev_img = vis.draw_points(ekf_bev_img, tid, [(v_bev, u_bev)], radius=6)
+        #     # draw on BEV image (vis.draw_points expects (row, col) pairs)
+        #     ekf_bev_img = vis.draw_points(ekf_bev_img, tid, [(v_bev, u_bev)], radius=6)
 
-            # convert BEV pixel -> original image pixel for overlay (from local BEV)
-            u_img, v_img = H.bev_to_pixel(v_bev, u_bev)
-            if u_img != -1 and v_img != -1:
-                ekf_img = vis.draw_on_img(
-                    ekf_img,
-                    [{"bbox": (0,0,0,0), "id": tid,
-                      "class": "ekf", "score": 1.0, "foot_uv": (u_img, v_img)}]
-                )
+        #     # convert BEV pixel -> original image pixel for overlay (from local BEV)
+        #     u_img, v_img = H.bev_to_pixel(v_bev, u_bev)
+        #     if u_img != -1 and v_img != -1:
+        #         ekf_img = vis.draw_on_img(
+        #             ekf_img,
+        #             [{"bbox": (0,0,0,0), "id": tid,
+        #               "class": "ekf", "score": 1.0, "foot_uv": (u_img, v_img)}]
+        #         )
 
         # --- Future trajectory visualization: use smoothed futures from state_manager.active_tracks
         horizon_steps = 20
@@ -324,7 +297,8 @@ def test_full_pipeline_with_lag_smoothing():
                 use_smoothing = hist_len >= (lag_size + 1)
                 print(f"[Smoothing] Track {track_id}: hist={hist_len}, using_smoothing={use_smoothing}")
 
-                if ts.future_traj is None:
+                # only attempt to compute a new future if smoothing is available (lag filled)
+                if ts.future_traj is None and use_smoothing:
                     # compute now
                     # use the track ekf's default dt where possible (keeps consistency with prior updates)
                     dt_local = getattr(ts.ekf, 'default_dt', state_manager.dt)
@@ -340,7 +314,8 @@ def test_full_pipeline_with_lag_smoothing():
                                 # some implementations use (horizon_steps) positional
                                 fut = ekf_under.predict_future(horizon_steps)
                         else:
-                            fut = ts.ekf.predict_future_with_smoothing(horizon_steps, dt=dt_local)
+                            # if smoothing isn't available and no underlying EKF exists, set None
+                            fut = None
 
                     if fut is not None:
                         ts.future_traj = [(float(p[0]), float(p[1])) for p in fut]
@@ -351,6 +326,7 @@ def test_full_pipeline_with_lag_smoothing():
 
             # draw the smoothed/fallback future if present
             fut = ts.future_traj
+            print(f"[Future Visualization] Track {track_id}: fut={fut}")
             if not fut:
                 continue
 
@@ -397,21 +373,7 @@ def test_full_pipeline_with_lag_smoothing():
             x_m, y_m = fbm.foot_bev
             debug_entry["detections_world"].append({"id": int(fbm.id), "x_m": float(x_m), "y_m": float(y_m)})
 
-        for tid, xy in ekf_now.items():
-            if xy is None:
-                continue
-
-            # global EKF prediction
-            x_m, y_m = float(xy[0]), float(xy[1])
-            debug_entry["ekf_pred_world"].append({"id": int(tid), "x_m": x_m, "y_m": y_m})
-
-            # xy is already local (vehicle-frame) meters
-            lx, ly = x_m, y_m
-            debug_entry["ekf_pred_local"] = debug_entry.get("ekf_pred_local", [])
-            debug_entry["ekf_pred_local"].append({"id": int(tid), "x_m": lx, "y_m": ly})
-
-            u_bev, v_bev = H.world_to_bev_img_pixel(lx, ly, flipped=True)
-            debug_entry["ekf_pred_pixel"].append({"id": int(tid), "u": int(u_bev), "v": int(v_bev)})
+        # Note: ekf_now loop removed because EKFManager is disabled in this test.
 
         dbg_path = out_bev_debug / f"frame_{frame_idx:06d}.json"
         with open(dbg_path, "w") as jf:

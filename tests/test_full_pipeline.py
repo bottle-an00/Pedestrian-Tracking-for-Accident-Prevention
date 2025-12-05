@@ -30,6 +30,7 @@ def test_full_pipeline():
 
     image_dir = Path(cfg[root_dir]["images"])
     gps_dir = Path(cfg[root_dir]["gps"])
+    from src.trajectory.ekf_tracker_cv import EKFTrackerCV
     out_root = Path(cfg[root_dir]["outputs"]) / "full_pipeline"
     out_root.mkdir(parents=True, exist_ok=True)
 
@@ -87,7 +88,7 @@ def test_full_pipeline():
     # Set eval_mode=True when you want per-frame prediction JSONs to be saved.
     eval_mode = True
 
-    # Use the improved Constant-Velocity EKF tracker (EKFTrackerCV) via EKFManager-compatible constructor
+    # Use the Constant-Velocity EKF tracker via EKFManager-compatible constructor
     from src.trajectory.ekf_tracker_cv import EKFTrackerCV
 
     state_manager = PedestrianStateManager(

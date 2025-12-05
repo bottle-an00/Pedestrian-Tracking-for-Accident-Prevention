@@ -167,6 +167,10 @@ class RealTimeEKFWithLagSmoothing:
         if sigma_a is None:
             sigma_a = float(getattr(self.ekf, 'sigma_a', self.sigma_a))
 
+        # require full lag history before returning a smoothed future
+        if len(self._x_hist) < (self.lag_size + 1):
+            return None
+
         # run smoothing on copies
         xs_s, Ps_s = self._run_fixed_lag_smoothing()
 
