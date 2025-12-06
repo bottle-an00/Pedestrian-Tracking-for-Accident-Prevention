@@ -15,17 +15,20 @@ class Detections_bev:
 
 
 class BevTransformer:
+    """BEV 변환기"""
     def __init__(self, intrinsics_path: str = None, extrinsics_path: str = None,
                  calib_image_size: tuple = None, homography=None):
+        """
+        Args:
+            intrinsics_path: 카메라 내부 파라미터 파일 경로 (calib_Camera0.txt)
+            extrinsics_path: 카메라-라이다 외부 파라미터 파일 경로 (calib_CameraToLidar0.txt)
+        """
+        cfg = load_yaml('configs/system.yaml')
 
         # 외부 Homography 인스턴스를 그대로 사용할 경우
         if homography is not None:
             self.homography = homography
             return
-
-        Args:
-            intrinsics_path: 카메라 내부 파라미터 파일 경로 (calib_Camera0.txt)
-            extrinsics_path: 카메라-라이다 외부 파라미터 파일 경로 (calib_CameraToLidar0.txt)
 
         intrinsics_path = (
             Path(intrinsics_path)
