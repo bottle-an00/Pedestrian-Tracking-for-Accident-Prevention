@@ -353,4 +353,14 @@ async def websocket_stream(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
+    import webbrowser
+    import threading
+
+    # 서버 시작 후 브라우저 자동 열기
+    def open_browser():
+        import time
+        time.sleep(1)  # 서버 시작 대기
+        webbrowser.open("file://" + str(PROJECT_ROOT / "ui" / "frontend" / "index.html"))
+
+    threading.Thread(target=open_browser, daemon=True).start()
     uvicorn.run(app, host="0.0.0.0", port=8000)
