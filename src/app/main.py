@@ -10,6 +10,13 @@ from src.visualization.overlay_2d import Visualizer
 from src.io.image_loader import ImageLoader
 from src.io.pcd_loader import PcdLoader
 from src.io.gps_loader import GpsImuLoader
+from src.calibration.load_calibration_info import CalibrationInfoLoader
+from src.calibration.homography import Homography
+from src.bev.bev_transformer import BevTransformer, Detections_bev
+from src.trajectory.trajectory_manager import TrajectoryBuffer
+from src.trajectory.ekf_manager import EKFManager
+from src.trajectory.pedestrian_state_manager import PedestrianStateManager
+from src.trajectory.bev_zone_risk_manager import PedestrianStateManager as BevZoneManager
 
 
 class DatasetLoader:
@@ -29,7 +36,7 @@ class DatasetLoader:
         # 이미지, 라이다, GPS 경로 로드
         image_dir = self.base_path / "image0"
         lidar_dir = self.base_path / "lidar"
-        gps_dir = self.base_path / "gps_imu"
+        gps_dir = self.base_path / "gps"
 
         self.image_files = self.image_loader.list_img_paths(image_dir) if image_dir.exists() else []
         self.lidar_files = self.pcd_loader.list_pcd_paths(lidar_dir) if lidar_dir.exists() else []
@@ -80,10 +87,32 @@ class Pipeline:
         self.yolo_model_path = self.cfg.get("yolo_model_path", "./models/yolo/yolo11n.pt")
         self.conf_threshold = self.cfg.get("conf_threshold", {"default": 0.5})
         self.target_classes = self.cfg.get("target_classes", ["person"])
-        self.imgsz = self.cfg.get("imgsz", 640)
+        self.imgsz = self.cfg.get("imgsz", 1280)
         self.visualize = True
 
         self.vis = Visualizer()
+        # initialize components used by full pipeline
+        self.calib_loader = CalibrationInfoLoader()
+
+        # tracker (YOLO based)
+        self.tracker = ByteTracker(
+            self.yolo_model_path,
+            self.conf_threshold,
+            self.target_classes,
+            imgsz=self.imgsz
+        )
+
+        # placeholders - constructed later if calibration available
+        self.homography = None
+        self.bev_conv = None
+
+        # common helpers
+        self.trajectory_buffer = TrajectoryBuffer(max_length=100)
+        self.ekf_manager = EKFManager()
+
+        self.state_manager = PedestrianStateManager(obs_len=10, max_missing=5, ekf_constructor=None)
+
+        self.bev_risk_manager = BevZoneManager()
 
         print("Pipeline initialized.")
 
@@ -163,3 +192,131 @@ class Pipeline:
             cv2.destroyAllWindows()
         except cv2.error:
             pass
+
+    def run_full_pipeline_sequence(self, seq_path):
+        """Full pipeline: detection -> BEV -> EKFManager -> risk manager -> save visual outputs
+
+        This method embeds the tmp_full_pipeline logic inside the Pipeline class. It attempts
+        to load camera/LiDAR calibration from `system.yaml` and runs per-frame processing.
+        """
+        print(f"\n{'='*20} Running FULL pipeline: {os.path.basename(seq_path)} {'='*20}")
+
+        self._dataset = DatasetLoader(seq_path)
+
+        cam_p = Path(seq_path) / 'calib_Camera0.txt'
+        lidar_cam_p = Path(seq_path) / 'calib_CameraToLidar0.txt'
+
+        if cam_p and lidar_cam_p and self.calib_loader is not None:
+            intrinsics = self.calib_loader.load_camera_calibration(Path(cam_p))
+            extrinsics = self.calib_loader.load_camera_extrinsics(Path(lidar_cam_p))
+            self.homography = Homography(intrinsics=intrinsics, extrinsics=extrinsics)
+            self.bev_conv = BevTransformer(homography=self.homography)
+
+        self._out_root = Path(seq_path) / "outputs" / "full_pipeline"
+        self._out_root.mkdir(parents=True, exist_ok=True)
+
+        self._out_ekf_bev = self._out_root / "ekf_bev"
+        self._out_ekf_img = self._out_root / "ekf_img"
+
+        for p in [self._out_ekf_bev, self._out_ekf_img]:
+            p.mkdir(parents=True, exist_ok=True)
+
+        img_iter = self._dataset.image_loader.iter_imgs_cv2(Path(seq_path) / 'image0')
+        gps_iter = self._dataset.gps_loader.iter_data(Path(seq_path) / 'gps')
+
+        H = self.homography
+        bev_conv = self.bev_conv
+        tracker = self.tracker
+        bev_risk_manager = self.bev_risk_manager
+        ekf_manager = self.ekf_manager
+        vis = self.vis
+        out_ekf_bev = self._out_ekf_bev
+        out_ekf_img = self._out_ekf_img
+
+        frame_idx = 0
+        # Main loop
+        for (img_path, image), (gps_path, gps_data) in zip(img_iter, gps_iter):
+            print(f"[Full Pipeline] Processing {img_path.name}")
+
+            detections = tracker.process(image)
+
+            bev_img = H.warp(image)
+            foot_bevs = bev_conv.foot_uv_to_foot_bev(detections)
+
+            foot_bevs_m = []
+            for fb in foot_bevs:
+                bx, by = fb.foot_bev
+                x_m, y_m = H.pixel_to_world(float(by), float(bx), flipped=True)
+                foot_bevs_m.append(Detections_bev(id=fb.id, foot_bev=(x_m, y_m)))
+
+            # vehicale_bev setting
+            vehicle_bev = bev_risk_manager.compute_vehicle_bev(image,H)
+            bev_risk_manager.set_zones_from_gps(gps_data, vehicle_bev=vehicle_bev)
+
+            ekf_now = {}
+            ekf_future = {}
+
+            # Use external ekf_manager for current estimates and future predictions
+            for d in foot_bevs_m:
+                try:
+                    tid = int(d.id)
+                except Exception:
+                    tid = d.id
+                xy = ekf_manager.update(tid, d.foot_bev, gps_data.time)
+                ekf_now[tid] = xy
+                ekf_future[tid] = ekf_manager.predict_future(tid, steps=20)
+
+            ekf_bev_img = bev_img.copy()
+            ekf_img = image.copy()
+
+            for tid, xy in ekf_now.items():
+                if xy is None:
+                    continue
+                lx, ly = float(xy[0]), float(xy[1])
+                u_bev, v_bev = H.world_to_bev_img_pixel(lx, ly, flipped=True)
+                ekf_bev_img = vis.draw_points(ekf_bev_img, tid, [(v_bev, u_bev)], radius=6)
+                u_img, v_img = H.bev_to_pixel(v_bev, u_bev)
+                if u_img != -1 and v_img != -1:
+                    ekf_img = vis.draw_on_img(ekf_img, [{"bbox": (0,0,0,0), "id": tid, "class": "ekf", "score": 1.0, "foot_uv": (u_img, v_img)}])
+
+            for tid, future in ekf_future.items():
+                if future is None:
+                    continue
+                bev_future_pts = []
+                img_uvs = []
+                for p in future:
+                    lx, ly = float(p[0]), float(p[1])
+                    u_bev, v_bev = H.world_to_bev_img_pixel(lx, ly, flipped=True)
+                    bev_future_pts.append((v_bev, u_bev))
+                    u_img, v_img = H.bev_to_pixel(v_bev, u_bev)
+                    if u_img != -1 and v_img != -1:
+                        img_uvs.append((u_img, v_img))
+
+                if len(bev_future_pts) == 1:
+                    ekf_bev_img = vis.draw_points(ekf_bev_img, tid, bev_future_pts, radius=4)
+                elif bev_future_pts:
+                    ekf_bev_img = vis.draw_polyline(ekf_bev_img, tid, bev_future_pts, color=(255, 0, 0), thickness=2)
+
+                if img_uvs:
+                    ekf_img = vis.draw_on_img(ekf_img, [{"bbox": (0,0,0,0), "id": tid, "class": "ekf_future", "score": 1.0, "foot_uv": uv} for uv in img_uvs])
+
+            # Update risk states
+            obj_states = {}
+            for tid, future in ekf_future.items():
+                state = "SAFE"
+                if future and len(future) > 0:
+                    updated_state = bev_risk_manager.update_state(tid, future)
+                    state = updated_state
+                obj_states[tid] = state
+
+            frame_idx += 1
+
+            # Visualizations
+            gt_vis = ekf_bev_img.copy()
+            gt_vis = bev_risk_manager.draw_zones_on_bev(gt_vis, alpha=0.25)
+            ekf_img = bev_risk_manager.draw_zones_on_image(ekf_img, H, alpha=0.25)
+            ekf_img = bev_risk_manager.draw_detections_on_image(ekf_img, detections)
+
+            cv2.imwrite(str(out_ekf_bev / f"ekf_bev_gt_{img_path.name}"), gt_vis)
+            cv2.imwrite(str(out_ekf_img / f"ekf_img_{img_path.name}"), ekf_img)
+
