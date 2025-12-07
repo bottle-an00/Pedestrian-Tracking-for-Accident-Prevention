@@ -30,6 +30,11 @@ dataset_dir:
     calib_LiDAR_Imu: ${root}/calib_LidarToImu.txt
     initial_location: ${root}/pos_ENU0.txt
 
+# UI 플랫폼용 데이터 경로 설정
+# 각 팀원이 자신의 데이터 경로로 수정해서 사용
+data:
+  sequence_dir: ""  # 예: /path/to/13_전방 보행자_val
+
 # 2880x1860 용 bev
 bev:
   resolution: 0.01      # [m/px]

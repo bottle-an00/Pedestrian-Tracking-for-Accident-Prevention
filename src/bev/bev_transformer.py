@@ -1,11 +1,6 @@
 import numpy as np
-from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Dict
-
-from src.calibration.homography import Homography
-from src.calibration.load_calibration_info import CalibrationInfoLoader
-from src.core.config import load_yaml
 
 
 @dataclass
@@ -20,7 +15,6 @@ class BevTransformer:
             raise ValueError("Homography must be provided during BevTransformer initialization")
 
         self.homography = homography
-
 
     def foot_uv_to_foot_bev(self, detections: List[Dict]) -> List[Detections_bev]:
         bev_detections = []

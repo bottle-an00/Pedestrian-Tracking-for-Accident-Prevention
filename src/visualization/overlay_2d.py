@@ -161,22 +161,29 @@ class Visualizer:
                     font_scale, (255, 255, 255), thickness)
 
         cv2.circle(img, (25, start_y + legend_spacing), r, (0, 255, 0), -1)
-        cv2.putText(img, "foot_uv (detected)",
+        cv2.putText(img, "foot_uv (pred)",
                     (45, start_y + legend_spacing + 8),
                     cv2.FONT_HERSHEY_SIMPLEX, font_scale,
                     (255, 255, 255), thickness)
 
-        cv2.circle(img, (25, start_y + legend_spacing * 2), r,
-                   (0, 165, 255), -1)
-        cv2.putText(img, "foot_uv (out_of_fov)",
+        cv2.drawMarker(img, (25, start_y + legend_spacing * 2),
+                       (255, 0, 255), cv2.MARKER_DIAMOND, 12, 2)
+        cv2.putText(img, "foot_uv (GT)",
                     (45, start_y + legend_spacing * 2 + 8),
                     cv2.FONT_HERSHEY_SIMPLEX, font_scale,
                     (255, 255, 255), thickness)
 
         cv2.circle(img, (25, start_y + legend_spacing * 3), r,
+                   (0, 165, 255), -1)
+        cv2.putText(img, "foot_uv (out_of_fov)",
+                    (45, start_y + legend_spacing * 3 + 8),
+                    cv2.FONT_HERSHEY_SIMPLEX, font_scale,
+                    (255, 255, 255), thickness)
+
+        cv2.circle(img, (25, start_y + legend_spacing * 4), r,
                    (0, 255, 255), -1)
         cv2.putText(img, "ankle keypoint",
-                    (45, start_y + legend_spacing * 3 + 8),
+                    (45, start_y + legend_spacing * 4 + 8),
                     cv2.FONT_HERSHEY_SIMPLEX, font_scale,
                     (255, 255, 255), thickness)
 
@@ -335,3 +342,162 @@ class Visualizer:
             pass
 
         return img
+
+    def draw_trajectory_on_bev(self, bev_img, trajectories):
+        """
+        Pred trajectory 시각화 (파란색 계열)
+
+        Args:
+            bev_img: BEV 이미지
+            trajectories: {track_id: [(row, col), ...], ...}
+            color: 기본 색상 (파란색)
+        """
+        img = bev_img.copy()
+        for tid, points in trajectories.items():
+            if len(points) < 2:
+                continue
+            # ID별 파란색 계열 색상 생성
+            rnd = pyrandom.Random(tid)
+            b = rnd.randint(200, 255)
+            g = rnd.randint(100, 200)
+            r = rnd.randint(0, 100)
+            traj_color = (b, g, r)  # BGR (파란색 계열)
+
+            pts = np.array([(int(col), int(row)) for row, col in points], dtype=np.int32)
+            cv2.polylines(img, [pts], isClosed=False, color=traj_color, thickness=2)
+
+            # 마지막 점에 원 표시
+            if len(pts) > 0:
+                cv2.circle(img, tuple(pts[-1]), 5, traj_color, -1)
+
+        return img
+
+    def draw_gt_trajectory_on_bev(self, bev_img, trajectories, color=(0, 255, 0)):
+        """
+        GT trajectory 시각화 (초록색)
+
+        Args:
+            bev_img: BEV 이미지
+            trajectories: {track_id: [(row, col), ...], ...}
+            color: 기본 색상 (초록색)
+        """
+        img = bev_img.copy()
+        for tid, points in trajectories.items():
+            if len(points) < 2:
+                continue
+
+            pts = np.array([(int(col), int(row)) for row, col in points], dtype=np.int32)
+            cv2.polylines(img, [pts], isClosed=False, color=color, thickness=2)
+
+            # 마지막 점에 원 표시
+            if len(pts) > 0:
+                cv2.circle(img, tuple(pts[-1]), 5, color, -1)
+
+        return img
+
+    def draw_gt_foot_uv(self, img, gt_objects, color=(255, 0, 255)):
+        """
+        GT foot_uv를 카메라 이미지에 시각화 (마젠타색 다이아몬드)
+
+        Args:
+            img: 카메라 이미지
+            gt_objects: GT 객체 리스트 (foot_uv 속성 포함)
+            color: GT foot_uv 색상 (기본: 마젠타)
+        """
+        vis_img = img.copy()
+        img_h, img_w = vis_img.shape[:2]
+
+        for gt in gt_objects:
+            foot_uv = getattr(gt, 'foot_uv', None)
+            if foot_uv is None or len(foot_uv) < 2:
+                continue
+
+            fu, fv = int(foot_uv[0]), int(foot_uv[1])
+
+            # 이미지 범위 내에 있을 때만 그리기
+            if 0 <= fu < img_w and 0 <= fv < img_h:
+                # 마젠타색 다이아몬드 마커로 GT 표시
+                cv2.drawMarker(vis_img, (fu, fv), color,
+                               cv2.MARKER_DIAMOND, 12, 2)
+
+                # GT ID 표시 (있으면)
+                tid = getattr(gt, 'track_id', None) or getattr(gt, 'instance_id', None)
+                if tid is not None:
+                    cv2.putText(vis_img, f"GT:{tid}",
+                                (fu + 8, fv - 8),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.4,
+                                color, 1)
+
+        return vis_img
+
+    def draw_trajectory_on_image(self, img, trajectories, color=None):
+        """
+        Pred foot_uv trajectory를 카메라 이미지에 시각화
+
+        Args:
+            img: 카메라 이미지
+            trajectories: {track_id: [(u, v), ...], ...}
+            color: 고정 색상 (None이면 ID별 색상)
+        """
+        vis_img = img.copy()
+        img_h, img_w = vis_img.shape[:2]
+
+        for tid, points in trajectories.items():
+            if len(points) < 2:
+                continue
+
+            # 색상 결정 (고정 or ID별)
+            line_color = color if color is not None else self.id_to_color(tid)
+
+            # 유효한 점들만 필터링
+            valid_pts = []
+            for u, v in points:
+                if 0 <= u < img_w and 0 <= v < img_h:
+                    valid_pts.append((int(u), int(v)))
+
+            if len(valid_pts) < 2:
+                continue
+
+            pts = np.array(valid_pts, dtype=np.int32)
+            cv2.polylines(vis_img, [pts], isClosed=False, color=line_color, thickness=2)
+
+            # 마지막 점에 원 표시
+            if len(pts) > 0:
+                cv2.circle(vis_img, tuple(pts[-1]), 6, line_color, -1)
+
+        return vis_img
+
+    def draw_gt_trajectory_on_image(self, img, trajectories, color=(255, 0, 255)):
+        """
+        GT foot_uv trajectory를 카메라 이미지에 시각화 (마젠타색)
+
+        Args:
+            img: 카메라 이미지
+            trajectories: {track_id: [(u, v), ...], ...}
+            color: 기본 색상 (마젠타)
+        """
+        vis_img = img.copy()
+        img_h, img_w = vis_img.shape[:2]
+
+        for tid, points in trajectories.items():
+            if len(points) < 2:
+                continue
+
+            # 유효한 점들만 필터링
+            valid_pts = []
+            for u, v in points:
+                if 0 <= u < img_w and 0 <= v < img_h:
+                    valid_pts.append((int(u), int(v)))
+
+            if len(valid_pts) < 2:
+                continue
+
+            pts = np.array(valid_pts, dtype=np.int32)
+            cv2.polylines(vis_img, [pts], isClosed=False, color=color, thickness=2)
+
+            # 마지막 점에 다이아몬드 마커 표시
+            if len(pts) > 0:
+                cv2.drawMarker(vis_img, tuple(pts[-1]), color,
+                               cv2.MARKER_DIAMOND, 12, 2)
+
+        return vis_img

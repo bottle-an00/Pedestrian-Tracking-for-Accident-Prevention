@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedestrian Tracking System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        .neon-border { box-shadow: 0 0 15px rgba(0, 191, 255, 0.3); }
+        .danger-glow { box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+        .safe-glow { box-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
+        .tab-active { border-bottom: 2px solid #06b6d4; color: #06b6d4; }
+        .video-panel { cursor: pointer; transition: transform 0.2s; }
+        .video-panel:hover { transform: scale(1.01); }
+
+        /* 모달 스타일 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            cursor: pointer;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-content {
+            max-width: 95vw;
+            max-height: 95vh;
+            object-fit: contain;
+        }
+        .modal-title {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 600;
+            background: rgba(0,0,0,0.7);
+            padding: 8px 20px;
+            border-radius: 8px;
+        }
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-[#0a0a0f] text-white min-h-screen">
+    <!-- Header -->
+    <header class="bg-[#121218] border-b border-[#1f1f2e] px-6 py-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold">Pedestrian Tracking System</h1>
+                    <p class="text-sm text-gray-400">Real-Time Detection & Evaluation</p>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <div class="flex gap-6">
+                <button id="tab-live" onclick="showTab('live')" class="px-4 py-2 text-sm font-medium tab-active">
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        Live View
+                    </span>
+                </button>
+                <button id="tab-analytics" onclick="showTab('analytics')" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white">
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        Analytics
+                    </span>
+                </button>
+            </div>
+
+            <!-- View Mode Toggle -->
+            <div class="flex items-center gap-2 bg-[#1a1a24] rounded-lg p-1">
+                <button id="view-dual" onclick="setViewMode('dual')" class="px-3 py-1.5 text-xs font-medium rounded bg-cyan-600 text-white">
+                    Dual
+                </button>
+                <button id="view-camera" onclick="setViewMode('camera')" class="px-3 py-1.5 text-xs font-medium rounded text-gray-400 hover:text-white hover:bg-[#252532]">
+                    Camera
+                </button>
+                <button id="view-bev" onclick="setViewMode('bev')" class="px-3 py-1.5 text-xs font-medium rounded text-gray-400 hover:text-white hover:bg-[#252532]">
+                    BEV
+                </button>
+            </div>
+
+            <!-- Status Indicator -->
+            <div id="status-badge" class="px-4 py-2 rounded-full bg-gray-700 text-gray-300 font-medium text-sm">
+                Not Connected
+            </div>
+        </div>
+    </header>
+
+    <!-- Live View Tab -->
+    <div id="live-view" class="flex">
+        <!-- Sidebar -->
+        <aside class="w-72 bg-[#121218] border-r border-[#1f1f2e] min-h-[calc(100vh-73px)] p-4">
+            <div class="space-y-4">
+                <!-- Sequence Selector -->
+                <div>
+                    <label class="text-sm text-gray-400 block mb-2">Select Sequence</label>
+                    <select id="seq-select" class="w-full bg-[#1a1a24] border border-[#2a2a3a] rounded-lg px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+
+                <!-- Load Button -->
+                <button id="load-btn" class="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium py-2.5 rounded-lg transition-all">
+                    Load Sequence
+                </button>
+
+                <!-- Model Info Panel -->
+                <div id="model-info-panel" class="hidden">
+                    <label class="text-sm text-gray-400 block mb-2">Model Info</label>
+                    <div class="bg-[#1a1a24] rounded-lg p-3 space-y-2 text-xs">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">YOLO Model</span>
+                            <span id="model-name" class="font-medium text-cyan-400">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Conf Threshold</span>
+                            <span id="conf-threshold" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Keypoint Threshold</span>
+                            <span id="kpt-threshold" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Input Size</span>
+                            <span id="input-size" class="font-medium">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="border-[#2a2a3a]">
+
+                <!-- Playback Controls -->
+                <div class="space-y-3">
+                    <label class="text-sm text-gray-400 block">Playback Controls</label>
+                    <div class="flex gap-2">
+                        <button id="play-btn" class="flex-1 bg-[#1a1a24] hover:bg-[#252532] border border-[#2a2a3a] py-2 rounded-lg transition-all flex items-center justify-center gap-2">
+                            <svg id="play-icon" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                            <span id="play-text">Play</span>
+                        </button>
+                        <button id="stop-btn" class="bg-[#1a1a24] hover:bg-[#252532] border border-[#2a2a3a] px-4 py-2 rounded-lg transition-all">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M6 6h12v12H6z"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Frame Slider -->
+                    <div>
+                        <div class="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>Frame</span>
+                            <span id="frame-counter">0 / 0</span>
+                        </div>
+                        <input type="range" id="frame-slider" min="0" max="100" value="0"
+                               class="w-full h-2 bg-[#2a2a3a] rounded-lg appearance-none cursor-pointer accent-cyan-500">
+                    </div>
+
+                    <!-- Speed Control -->
+                    <div>
+                        <div class="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>Speed</span>
+                            <span id="speed-value">10 FPS</span>
+                        </div>
+                        <input type="range" id="speed-slider" min="1" max="30" value="10"
+                               class="w-full h-2 bg-[#2a2a3a] rounded-lg appearance-none cursor-pointer accent-purple-500">
+                    </div>
+                </div>
+
+                <hr class="border-[#2a2a3a]">
+
+                <!-- Vehicle Info -->
+                <div class="space-y-3">
+                    <label class="text-sm text-gray-400 block">Vehicle Info</label>
+                    <div class="bg-[#1a1a24] rounded-lg p-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500 text-sm">Speed</span>
+                            <span id="vehicle-speed" class="font-medium text-cyan-400 text-lg">- km/h</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detection Info -->
+                <div class="space-y-3">
+                    <label class="text-sm text-gray-400 block">Detection Info</label>
+                    <div class="bg-[#1a1a24] rounded-lg p-3 space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 text-sm">Pedestrians</span>
+                            <span id="ped-count" class="font-medium">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 text-sm">In Risk Zone</span>
+                            <span id="risk-count" class="font-medium text-red-400">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 text-sm">Closest Distance</span>
+                            <span id="closest-dist" class="font-medium">- m</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alert Status -->
+                <div id="alert-panel" class="bg-green-500/20 border border-green-500/50 rounded-lg p-4 text-center safe-glow">
+                    <div class="text-2xl font-bold text-green-400" id="alert-text">SAFE</div>
+                    <div class="text-xs text-green-300 mt-1" id="alert-sub">No threats detected</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content - Video Panels -->
+        <main class="flex-1 p-6">
+            <div id="video-grid" class="grid grid-cols-2 gap-6 h-[calc(100vh-120px)]">
+                <!-- Camera View -->
+                <div id="camera-panel" class="bg-[#121218] rounded-xl border border-[#1f1f2e] overflow-hidden neon-border video-panel flex flex-col">
+                    <div class="bg-[#1a1a24] px-4 py-3 border-b border-[#2a2a3a] flex items-center justify-between" onclick="openModal('camera')">
+                        <div class="flex items-center gap-2">
+                            <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span class="font-medium">Camera View</span>
+                        </div>
+                        <span class="text-xs text-gray-500">Click to enlarge</span>
+                    </div>
+                    <div class="flex-1 bg-black flex items-center justify-center" onclick="openModal('camera')">
+                        <img id="camera-frame" class="w-full h-full object-contain hidden" src="" alt="Camera View">
+                        <div id="camera-placeholder" class="text-gray-600 text-center">
+                            <svg class="w-16 h-16 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                            </svg>
+                            <p>Load a sequence to start</p>
+                        </div>
+                    </div>
+                    <!-- Camera Legend -->
+                    <div id="camera-legend" class="bg-[#1a1a24] px-4 py-3 border-t border-[#2a2a3a] text-sm hidden">
+                        <div class="flex flex-wrap gap-5 items-center">
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded-full bg-blue-500"></div>
+                                <span class="text-gray-300">foot_uv (pred)</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 bg-green-500" style="transform: rotate(45deg);"></div>
+                                <span class="text-gray-300">foot_uv (GT)</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded-full bg-orange-400"></div>
+                                <span class="text-gray-300">out_of_fov</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-1 bg-blue-500 rounded"></div>
+                                <span class="text-gray-300">pred traj</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-1 bg-green-500 rounded"></div>
+                                <span class="text-gray-300">GT traj</span>
+                            </div>
+                            <div class="flex items-center gap-2 ml-4 border-l border-[#3a3a4a] pl-4">
+                                <div class="w-4 h-4 rounded border-2 border-blue-500 bg-gray-600 opacity-60"></div>
+                                <span class="text-gray-300">SAFE</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded border-2 border-blue-500 bg-orange-400 opacity-60"></div>
+                                <span class="text-gray-300">CAUTION</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded border-2 border-blue-500 bg-red-500 opacity-60"></div>
+                                <span class="text-gray-300">RISK</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BEV View -->
+                <div id="bev-panel" class="bg-[#121218] rounded-xl border border-[#1f1f2e] overflow-hidden neon-border video-panel flex flex-col">
+                    <div class="bg-[#1a1a24] px-4 py-3 border-b border-[#2a2a3a] flex items-center justify-between" onclick="openModal('bev')">
+                        <div class="flex items-center gap-2">
+                            <div class="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
+                            <span class="font-medium">Bird's Eye View (BEV)</span>
+                        </div>
+                        <span class="text-xs text-gray-500">Click to enlarge</span>
+                    </div>
+                    <div class="flex-1 bg-black flex items-center justify-center" onclick="openModal('bev')">
+                        <img id="bev-frame" class="w-full h-full object-contain hidden" src="" alt="BEV View">
+                        <div id="bev-placeholder" class="text-gray-600 text-center">
+                            <svg class="w-16 h-16 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                            </svg>
+                            <p>BEV Transform</p>
+                        </div>
+                    </div>
+                    <!-- BEV Legend -->
+                    <div id="bev-legend" class="bg-[#1a1a24] px-4 py-3 border-t border-[#2a2a3a] text-sm hidden">
+                        <div class="flex flex-wrap gap-5 items-center">
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded bg-red-500 opacity-60"></div>
+                                <span class="text-gray-300">RISK zone</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded bg-yellow-400 opacity-60"></div>
+                                <span class="text-gray-300">CAUTION zone</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded bg-green-400 opacity-60"></div>
+                                <span class="text-gray-300">SAFE zone</span>
+                            </div>
+                            <div class="flex items-center gap-2 ml-4 border-l border-[#3a3a4a] pl-4">
+                                <div class="w-8 h-1 bg-blue-500 rounded"></div>
+                                <span class="text-gray-300">pred traj</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-1 bg-green-500 rounded"></div>
+                                <span class="text-gray-300">GT traj</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-1 bg-blue-800 rounded"></div>
+                                <span class="text-gray-300">future pred</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="image-modal" class="modal-overlay" onclick="closeModal()">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <div class="modal-title" id="modal-title">Camera View</div>
+        <img id="modal-image" class="modal-content" src="" alt="Enlarged View">
+    </div>
+
+    <!-- Analytics Tab -->
+    <div id="analytics-view" class="hidden p-6">
+        <!-- Overall Stats Cards -->
+        <div class="grid grid-cols-4 gap-6 mb-6">
+            <div class="bg-[#121218] rounded-xl border border-[#1f1f2e] p-6">
+                <div class="text-gray-400 text-sm mb-2">Total Sequences</div>
+                <div class="text-3xl font-bold" id="stat-sequences">11</div>
+                <div class="text-xs text-cyan-400 mt-1">2,200 frames</div>
+            </div>
+            <div class="bg-[#121218] rounded-xl border border-[#1f1f2e] p-6">
+                <div class="text-gray-400 text-sm mb-2">mAP@50</div>
+                <div class="text-3xl font-bold text-green-400" id="stat-map">21.74%</div>
+                <div class="text-xs text-gray-500 mt-1">Detection accuracy</div>
+            </div>
+            <div class="bg-[#121218] rounded-xl border border-[#1f1f2e] p-6">
+                <div class="text-gray-400 text-sm mb-2">MOTA</div>
+                <div class="text-3xl font-bold text-blue-400" id="stat-mota">14.65%</div>
+                <div class="text-xs text-gray-500 mt-1">Tracking accuracy</div>
+            </div>
+            <div class="bg-[#121218] rounded-xl border border-[#1f1f2e] p-6">
+                <div class="text-gray-400 text-sm mb-2">HOTA</div>
+                <div class="text-3xl font-bold text-purple-400" id="stat-hota">26.23%</div>
+                <div class="text-xs text-gray-500 mt-1">Higher Order Tracking</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-6 mb-6">
+            <!-- Per-Sequence Chart -->
+            <div class="bg-[#121218] rounded-xl border border-[#1f1f2e] p-6">
+                <h3 class="text-lg font-semibold mb-4">Per-Sequence AP@50</h3>
+                <canvas id="chart-ap"></canvas>
+            </div>
+
+            <!-- Metrics Comparison Chart -->
+            <div class="bg-[#121218] rounded-xl border border-[#1f1f2e] p-6">
+                <h3 class="text-lg font-semibold mb-4">Tracking Metrics by Sequence</h3>
+                <canvas id="chart-tracking"></canvas>
+            </div>
+        </div>
+
+        <!-- Per-Sequence Table -->
+        <div class="bg-[#121218] rounded-xl border border-[#1f1f2e] p-6">
+            <h3 class="text-lg font-semibold mb-4">Per-Sequence Results</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-gray-400 border-b border-[#2a2a3a]">
+                            <th class="text-left py-3 px-4">Sequence</th>
+                            <th class="text-right py-3 px-4">Frames</th>
+                            <th class="text-right py-3 px-4">TP</th>
+                            <th class="text-right py-3 px-4">FP</th>
+                            <th class="text-right py-3 px-4">FN</th>
+                            <th class="text-right py-3 px-4">AP@50</th>
+                            <th class="text-right py-3 px-4">Precision</th>
+                            <th class="text-right py-3 px-4">Recall</th>
+                            <th class="text-right py-3 px-4">MOTA</th>
+                            <th class="text-right py-3 px-4">HOTA</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-table">
+                        <!-- Populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        function showTab(tab) {
+            const liveView = document.getElementById('live-view');
+            const analyticsView = document.getElementById('analytics-view');
+            const tabLive = document.getElementById('tab-live');
+            const tabAnalytics = document.getElementById('tab-analytics');
+
+            if (tab === 'live') {
+                liveView.classList.remove('hidden');
+                analyticsView.classList.add('hidden');
+                tabLive.classList.add('tab-active');
+                tabLive.classList.remove('text-gray-400');
+                tabAnalytics.classList.remove('tab-active');
+                tabAnalytics.classList.add('text-gray-400');
+            } else {
+                liveView.classList.add('hidden');
+                analyticsView.classList.remove('hidden');
+                tabAnalytics.classList.add('tab-active');
+                tabAnalytics.classList.remove('text-gray-400');
+                tabLive.classList.remove('tab-active');
+                tabLive.classList.add('text-gray-400');
+                loadAnalytics();
+            }
+        }
+
+        // Evaluation Results Data
+        const evalResults = {
+            overall: {
+                sequences: 11,
+                frames: 2200,
+                ap50: 0.2174,
+                mota: 0.1465,
+                hota: 0.2623,
+                precision: 0.8748,
+                recall: 0.1963
+            },
+            perSequence: [
+                { seq: '003', frames: 200, tp: 7, fp: 0, fn: 120, ap50: 0.0909, prec: 1.000, recall: 0.055, mota: 0.0551, hota: 0.0572 },
+                { seq: '013', frames: 200, tp: 12, fp: 5, fn: 173, ap50: 0.0909, prec: 0.706, recall: 0.065, mota: 0.0378, hota: 0.1900 },
+                { seq: '023', frames: 200, tp: 30, fp: 0, fn: 107, ap50: 0.2727, prec: 1.000, recall: 0.219, mota: 0.2190, hota: 0.2427 },
+                { seq: '033', frames: 200, tp: 76, fp: 16, fn: 199, ap50: 0.2560, prec: 0.826, recall: 0.276, mota: 0.2182, hota: 0.2595 },
+                { seq: '043', frames: 200, tp: 37, fp: 1, fn: 184, ap50: 0.1818, prec: 0.974, recall: 0.167, mota: 0.1629, hota: 0.2127 },
+                { seq: '053', frames: 200, tp: 180, fp: 2, fn: 267, ap50: 0.4535, prec: 0.989, recall: 0.403, mota: 0.3982, hota: 0.6179 },
+                { seq: '063', frames: 200, tp: 211, fp: 1, fn: 188, ap50: 0.5450, prec: 0.995, recall: 0.529, mota: 0.5263, hota: 0.6513 },
+                { seq: '073', frames: 200, tp: 17, fp: 100, fn: 206, ap50: 0.0455, prec: 0.145, recall: 0.076, mota: -0.3722, hota: 0.1485 },
+                { seq: '083', frames: 200, tp: 76, fp: 1, fn: 339, ap50: 0.1818, prec: 0.987, recall: 0.183, mota: 0.1807, hota: 0.2106 },
+                { seq: '093', frames: 200, tp: 27, fp: 0, fn: 165, ap50: 0.1818, prec: 1.000, recall: 0.141, mota: 0.1406, hota: 0.1655 },
+                { seq: '103', frames: 200, tp: 22, fp: 0, fn: 470, ap50: 0.0909, prec: 1.000, recall: 0.045, mota: 0.0447, hota: 0.1291 }
+            ]
+        };
+
+        let apChart = null;
+        let trackingChart = null;
+
+        function loadAnalytics() {
+            // Update overall stats
+            document.getElementById('stat-sequences').textContent = evalResults.overall.sequences;
+            document.getElementById('stat-map').textContent = (evalResults.overall.ap50 * 100).toFixed(2) + '%';
+            document.getElementById('stat-mota').textContent = (evalResults.overall.mota * 100).toFixed(2) + '%';
+            document.getElementById('stat-hota').textContent = (evalResults.overall.hota * 100).toFixed(2) + '%';
+
+            // Populate table
+            const tbody = document.getElementById('results-table');
+            tbody.innerHTML = '';
+            evalResults.perSequence.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-[#2a2a3a] hover:bg-[#1a1a24]';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-medium">${row.seq}</td>
+                    <td class="py-3 px-4 text-right">${row.frames}</td>
+                    <td class="py-3 px-4 text-right text-green-400">${row.tp}</td>
+                    <td class="py-3 px-4 text-right text-red-400">${row.fp}</td>
+                    <td class="py-3 px-4 text-right text-yellow-400">${row.fn}</td>
+                    <td class="py-3 px-4 text-right">${(row.ap50 * 100).toFixed(1)}%</td>
+                    <td class="py-3 px-4 text-right">${(row.prec * 100).toFixed(1)}%</td>
+                    <td class="py-3 px-4 text-right">${(row.recall * 100).toFixed(1)}%</td>
+                    <td class="py-3 px-4 text-right ${row.mota < 0 ? 'text-red-400' : ''}">${(row.mota * 100).toFixed(1)}%</td>
+                    <td class="py-3 px-4 text-right">${(row.hota * 100).toFixed(1)}%</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Create charts
+            createCharts();
+        }
+
+        function createCharts() {
+            const labels = evalResults.perSequence.map(r => r.seq);
+
+            // AP Chart
+            const ctxAp = document.getElementById('chart-ap').getContext('2d');
+            if (apChart) apChart.destroy();
+            apChart = new Chart(ctxAp, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'AP@50',
+                        data: evalResults.perSequence.map(r => r.ap50 * 100),
+                        backgroundColor: 'rgba(6, 182, 212, 0.7)',
+                        borderColor: 'rgba(6, 182, 212, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: '#2a2a3a' },
+                            ticks: { color: '#888' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#888' }
+                        }
+                    }
+                }
+            });
+
+            // Tracking Chart
+            const ctxTracking = document.getElementById('chart-tracking').getContext('2d');
+            if (trackingChart) trackingChart.destroy();
+            trackingChart = new Chart(ctxTracking, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'MOTA',
+                            data: evalResults.perSequence.map(r => r.mota * 100),
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'HOTA',
+                            data: evalResults.perSequence.map(r => r.hota * 100),
+                            borderColor: 'rgba(168, 85, 247, 1)',
+                            backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#888' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            grid: { color: '#2a2a3a' },
+                            ticks: { color: '#888' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#888' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // WebSocket and Live View Logic
+        let ws = null;
+        let isPlaying = false;
+        let totalFrames = 0;
+
+        const seqSelect = document.getElementById('seq-select');
+        const loadBtn = document.getElementById('load-btn');
+        const playBtn = document.getElementById('play-btn');
+        const playIcon = document.getElementById('play-icon');
+        const playText = document.getElementById('play-text');
+        const stopBtn = document.getElementById('stop-btn');
+        const frameSlider = document.getElementById('frame-slider');
+        const frameCounter = document.getElementById('frame-counter');
+        const speedSlider = document.getElementById('speed-slider');
+        const speedValue = document.getElementById('speed-value');
+        const cameraFrame = document.getElementById('camera-frame');
+        const bevFrame = document.getElementById('bev-frame');
+        const cameraPlaceholder = document.getElementById('camera-placeholder');
+        const bevPlaceholder = document.getElementById('bev-placeholder');
+        const statusBadge = document.getElementById('status-badge');
+        const alertPanel = document.getElementById('alert-panel');
+        const alertText = document.getElementById('alert-text');
+        const alertSub = document.getElementById('alert-sub');
+
+        async function init() {
+            try {
+                const res = await fetch('http://localhost:8000/api/sequences');
+                const data = await res.json();
+
+                seqSelect.innerHTML = '<option value="">Select a sequence...</option>';
+                data.sequences.forEach(seq => {
+                    const opt = document.createElement('option');
+                    opt.value = seq.path;
+                    opt.textContent = seq.name;
+                    seqSelect.appendChild(opt);
+                });
+
+                updateStatus('connected');
+            } catch (e) {
+                console.error('Failed to connect:', e);
+                updateStatus('error');
+            }
+
+            connectWebSocket();
+        }
+
+        function connectWebSocket() {
+            ws = new WebSocket('ws://localhost:8000/ws/stream');
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                updateStatus('connected');
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                updateStatus('disconnected');
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (e) => {
+                console.error('WebSocket error:', e);
+            };
+        }
+
+        function handleMessage(data) {
+            if (data.type === 'load_result') {
+                if (data.success) {
+                    totalFrames = data.total_frames;
+                    frameSlider.max = totalFrames - 1;
+                    frameCounter.textContent = `1 / ${totalFrames}`;
+
+                    // 모델 정보 표시
+                    if (data.model_info) {
+                        const modelInfoPanel = document.getElementById('model-info-panel');
+                        modelInfoPanel.classList.remove('hidden');
+
+                        document.getElementById('model-name').textContent = data.model_info.yolo_model || '-';
+
+                        // conf_threshold 표시 (dict 형식 처리)
+                        const confThres = data.model_info.conf_threshold;
+                        if (typeof confThres === 'object') {
+                            const thresText = Object.entries(confThres)
+                                .map(([k, v]) => `${k}: ${v}`)
+                                .join(', ');
+                            document.getElementById('conf-threshold').textContent = thresText;
+                        } else {
+                            document.getElementById('conf-threshold').textContent = confThres || '-';
+                        }
+
+                        document.getElementById('kpt-threshold').textContent = data.model_info.keypoint_threshold || '-';
+                        document.getElementById('input-size').textContent = data.model_info.imgsz || '-';
+                    }
+
+                    // 범례 표시 (시퀀스 로드 성공 시)
+                    document.getElementById('camera-legend').classList.remove('hidden');
+                    document.getElementById('bev-legend').classList.remove('hidden');
+                }
+            } else if (data.type === 'frame') {
+                updateFrame(data);
+            } else if (data.type === 'paused' || data.type === 'stopped' || data.type === 'finished') {
+                setPlayState(false);
+            }
+        }
+
+        function updateFrame(data) {
+            if (data.camera) {
+                cameraFrame.src = 'data:image/jpeg;base64,' + data.camera;
+                cameraFrame.classList.remove('hidden');
+                cameraPlaceholder.style.display = 'none';
+            }
+
+            if (data.bev) {
+                bevFrame.src = 'data:image/jpeg;base64,' + data.bev;
+                bevFrame.classList.remove('hidden');
+                bevPlaceholder.style.display = 'none';
+            }
+
+            frameSlider.value = data.frame_idx;
+            frameCounter.textContent = `${data.frame_idx + 1} / ${data.total_frames}`;
+
+            if (data.detections) {
+                document.getElementById('ped-count').textContent = data.detections.count || 0;
+                document.getElementById('risk-count').textContent = data.detections.in_risk_zone || 0;
+
+                if (data.detections.closest_distance !== null) {
+                    document.getElementById('closest-dist').textContent = data.detections.closest_distance + ' m';
+                } else {
+                    document.getElementById('closest-dist').textContent = '- m';
+                }
+
+                if (data.detections.in_risk_zone > 0) {
+                    setAlertStatus('danger');
+                } else if (data.detections.count > 0 && data.detections.closest_distance && data.detections.closest_distance < 15) {
+                    setAlertStatus('caution');
+                } else {
+                    setAlertStatus('safe');
+                }
+            }
+
+            // 차량 속도 업데이트 (GPS 없거나 정지시 0 km/h 표시)
+            if (data.vehicle_speed !== null && data.vehicle_speed !== undefined) {
+                document.getElementById('vehicle-speed').textContent = data.vehicle_speed + ' km/h';
+            } else {
+                document.getElementById('vehicle-speed').textContent = '0 km/h';
+            }
+        }
+
+        function updateStatus(status) {
+            if (status === 'connected') {
+                statusBadge.textContent = 'Connected';
+                statusBadge.className = 'px-4 py-2 rounded-full bg-green-500/20 text-green-400 font-medium text-sm';
+            } else {
+                statusBadge.textContent = 'Disconnected';
+                statusBadge.className = 'px-4 py-2 rounded-full bg-red-500/20 text-red-400 font-medium text-sm';
+            }
+        }
+
+        function setPlayState(playing) {
+            isPlaying = playing;
+            if (playing) {
+                playIcon.innerHTML = '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>';
+                playText.textContent = 'Pause';
+            } else {
+                playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+                playText.textContent = 'Play';
+            }
+        }
+
+        function setAlertStatus(status) {
+            if (status === 'danger') {
+                alertPanel.className = 'bg-red-500/20 border border-red-500/50 rounded-lg p-4 text-center danger-glow';
+                alertText.textContent = 'DANGER';
+                alertText.className = 'text-2xl font-bold text-red-400';
+                alertSub.textContent = 'Pedestrian in risk zone!';
+                alertSub.className = 'text-xs text-red-300 mt-1';
+            } else if (status === 'caution') {
+                alertPanel.className = 'bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-4 text-center';
+                alertPanel.style.boxShadow = '0 0 20px rgba(234, 179, 8, 0.5)';
+                alertText.textContent = 'CAUTION';
+                alertText.className = 'text-2xl font-bold text-yellow-400';
+                alertSub.textContent = 'Pedestrian nearby';
+                alertSub.className = 'text-xs text-yellow-300 mt-1';
+            } else {
+                alertPanel.className = 'bg-green-500/20 border border-green-500/50 rounded-lg p-4 text-center safe-glow';
+                alertText.textContent = 'SAFE';
+                alertText.className = 'text-2xl font-bold text-green-400';
+                alertSub.textContent = 'No threats detected';
+                alertSub.className = 'text-xs text-green-300 mt-1';
+            }
+        }
+
+        // Event Listeners
+        loadBtn.addEventListener('click', () => {
+            const path = seqSelect.value;
+            if (!path || !ws || ws.readyState !== WebSocket.OPEN) return;
+            ws.send(JSON.stringify({ command: 'load', path }));
+        });
+
+        playBtn.addEventListener('click', () => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+            if (isPlaying) {
+                ws.send(JSON.stringify({ command: 'pause' }));
+                setPlayState(false);
+            } else {
+                ws.send(JSON.stringify({ command: 'play', fps: parseInt(speedSlider.value) }));
+                setPlayState(true);
+            }
+        });
+
+        stopBtn.addEventListener('click', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ command: 'stop' }));
+                setPlayState(false);
+            }
+        });
+
+        frameSlider.addEventListener('input', () => {
+            if (ws && ws.readyState === WebSocket.OPEN && !isPlaying) {
+                ws.send(JSON.stringify({ command: 'seek', frame_idx: parseInt(frameSlider.value) }));
+            }
+        });
+
+        speedSlider.addEventListener('input', () => {
+            speedValue.textContent = `${speedSlider.value} FPS`;
+        });
+
+        // View Mode functions
+        let currentViewMode = 'dual';
+
+        function setViewMode(mode) {
+            currentViewMode = mode;
+            const videoGrid = document.getElementById('video-grid');
+            const cameraPanel = document.getElementById('camera-panel');
+            const bevPanel = document.getElementById('bev-panel');
+            const viewDual = document.getElementById('view-dual');
+            const viewCamera = document.getElementById('view-camera');
+            const viewBev = document.getElementById('view-bev');
+
+            // Reset button styles
+            [viewDual, viewCamera, viewBev].forEach(btn => {
+                btn.className = 'px-3 py-1.5 text-xs font-medium rounded text-gray-400 hover:text-white hover:bg-[#252532]';
+            });
+
+            if (mode === 'dual') {
+                videoGrid.className = 'grid grid-cols-2 gap-6 h-[calc(100vh-120px)]';
+                cameraPanel.classList.remove('hidden');
+                bevPanel.classList.remove('hidden');
+                viewDual.className = 'px-3 py-1.5 text-xs font-medium rounded bg-cyan-600 text-white';
+            } else if (mode === 'camera') {
+                videoGrid.className = 'grid grid-cols-1 gap-6 h-[calc(100vh-120px)]';
+                cameraPanel.classList.remove('hidden');
+                bevPanel.classList.add('hidden');
+                viewCamera.className = 'px-3 py-1.5 text-xs font-medium rounded bg-cyan-600 text-white';
+            } else if (mode === 'bev') {
+                videoGrid.className = 'grid grid-cols-1 gap-6 h-[calc(100vh-120px)]';
+                cameraPanel.classList.add('hidden');
+                bevPanel.classList.remove('hidden');
+                viewBev.className = 'px-3 py-1.5 text-xs font-medium rounded bg-cyan-600 text-white';
+            }
+        }
+
+        // Modal functions
+        function openModal(type) {
+            const modal = document.getElementById('image-modal');
+            const modalImage = document.getElementById('modal-image');
+            const modalTitle = document.getElementById('modal-title');
+
+            if (type === 'camera') {
+                const src = document.getElementById('camera-frame').src;
+                if (src && !src.endsWith('undefined')) {
+                    modalImage.src = src;
+                    modalTitle.textContent = 'Camera View';
+                    modal.classList.add('active');
+                }
+            } else if (type === 'bev') {
+                const src = document.getElementById('bev-frame').src;
+                if (src && !src.endsWith('undefined')) {
+                    modalImage.src = src;
+                    modalTitle.textContent = "Bird's Eye View (BEV)";
+                    modal.classList.add('active');
+                }
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('image-modal').classList.remove('active');
+        }
+
+        // ESC key to close modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        init();
+    </script>
+</body>
+</html>

@@ -29,7 +29,10 @@ class DatasetLoader:
         # 이미지, 라이다, GPS 경로 로드
         image_dir = self.base_path / "image0"
         lidar_dir = self.base_path / "lidar"
+        # GPS 폴더명: gps_imu 또는 gps (데이터셋마다 다를 수 있음)
         gps_dir = self.base_path / "gps_imu"
+        if not gps_dir.exists():
+            gps_dir = self.base_path / "gps"
 
         self.image_files = self.image_loader.list_img_paths(image_dir) if image_dir.exists() else []
         self.lidar_files = self.pcd_loader.list_pcd_paths(lidar_dir) if lidar_dir.exists() else []
