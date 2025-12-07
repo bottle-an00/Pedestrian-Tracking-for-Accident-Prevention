@@ -21,6 +21,7 @@ from src.trajectory.trajectory_manager import TrajectoryBuffer
 from src.trajectory.ekf_manager import EKFManager
 from src.visualization.overlay_2d import Visualizer
 from src.trajectory.pedestrian_state_manager import PedestrianStateManager
+from src.trajectory.bev_zone_risk_manager import PedestrianStateManager as BevZoneManager
 from src.trajectory.ekf_tracker import EKFTracker
 
 
@@ -131,6 +132,9 @@ def test_full_pipeline():
     img_iter = image_loader.iter_imgs_cv2(image_dir)
     gps_iter = gps_loader.iter_data(gps_dir)
 
+    # BEV-based risk zone manager (separate from EKF state_manager)
+    bev_risk_manager = BevZoneManager()
+
     for (img_path, image), (gps_path, gps_data) in zip(img_iter, gps_iter):
         # per-frame match counter
         matched_count = 0
@@ -144,6 +148,8 @@ def test_full_pipeline():
 
         # Save to outputs/detection/ with same filename pattern used in main
         cv2.imwrite(str(out_detection / f"det_{img_path.name}"), img_tracking)
+        # keep a copy of the detection overlay to blend into ekf_img later
+        detection_overlay = img_tracking.copy()
 
         # Image to BEV
         bev_img = H.warp(image)
@@ -171,15 +177,9 @@ def test_full_pipeline():
         v = float(img_h - 1)
         vehicle_bev = H.pixel_to_bev_warp(u, v)
 
-        bev_risk_img = vis.draw_risk_zone_bev(
-            bev_img.copy(),
-            front_m=front_m,
-            width_m=1.25,
-            bev_resolution=float(cfg['bev']['resolution']),
-            caution_color=(0,255,255),
-            caution_alpha=0.25,
-            vehicle_bev=vehicle_bev
-        )
+        # Use bev_zone_risk_manager to set zones and draw on BEV
+        bev_risk_manager.set_zones_from_gps(gps_data, vehicle_bev=vehicle_bev)
+        bev_risk_img = bev_risk_manager.draw_zones_on_bev(bev_img.copy(), alpha=0.25)
         cv2.imwrite(str(out_bev_risk / f"bev_risk_{img_path.name}"), bev_risk_img)
 
         # Trajectory update WITHOUT ego-motion compensation: keep local vehicle-frame coords
@@ -223,23 +223,6 @@ def test_full_pipeline():
 
         cv2.imwrite(str(out_bev_traj / f"bev_traj_{img_path.name}"), bev_traj_img)
 
-        # Trajectory to original image
-        img_traj = image.copy()
-        for tid, traj in trajectory_buffer.get_all().items():
-            # traj already in local vehicle-frame meters (no ego compensation)
-            uv_list = bev_conv.foot_bev_to_foot_uv([p.foot_bev for p in traj])
-
-            img_traj = vis.draw_on_img(
-                img_traj,
-                [
-                    {"bbox": (0,0,0,0), "id": tid,
-                     "class": "traj", "score": 1.0, "foot_uv": uv}
-                    for uv in uv_list
-                ]
-            )
-
-        cv2.imwrite(str(out_img_traj / f"img_traj_{img_path.name}"), img_traj)
-
         # EKF update & prediction
         ekf_now = {}
         ekf_future = {}
@@ -253,6 +236,8 @@ def test_full_pipeline():
 
         ekf_bev_img = bev_img.copy()
         ekf_img = image.copy()
+        # if detection overlay exists, blend it into ekf_img for visualization
+        # blend with alpha to preserve EKF text and other overlays
 
         # Visualize EKF current predictions: convert world->BEV pixel for drawing
         for tid, xy in ekf_now.items():
@@ -312,6 +297,20 @@ def test_full_pipeline():
                       "score": 1.0, "foot_uv": uv}
                      for uv in img_uvs]
                 )
+        # Determine per-object risk state using bev_risk_manager and EKF future positions
+        # For each track, sample 4 points across the EKF future prediction and pick the worst
+        # severity among the samples (RISK > CAUTION > SAFE). Use the sample that produced
+        # the worst severity when calling bev_risk_manager.update_state(...) so hysteresis
+        # is applied based on the most concerning future point.
+        obj_states = {}
+        for tid, future in ekf_future.items():
+            state = "SAFE"
+                # Delegate sampling + worst-case selection to bev_risk_manager.update_state
+            if future and len(future) > 0:
+                updated_state = bev_risk_manager.update_state(tid, future)
+                state = updated_state
+
+            obj_states[tid] = state
 
         # --- Debug output: save BEV pixel -> world -> pixel mappings per frame
         debug_entry = {
@@ -355,6 +354,22 @@ def test_full_pipeline():
         # Additionally: match current detections to GT and draw matched GT future positions
         # onto a copy of the EKF BEV image. Also label which detections matched GT.
         gt_vis = ekf_bev_img.copy()
+        # Draw BEV risk overlay on the GT/BEV visualization
+        try:
+            gt_vis = bev_risk_manager.draw_zones_on_bev(gt_vis, alpha=0.25)
+        except Exception:
+            # fallback: leave gt_vis unchanged on failure
+            pass
+        # Also draw BEV risk overlay projected onto the original EKF image
+        try:
+            ekf_img = bev_risk_manager.draw_zones_on_image(ekf_img, H, alpha=0.25)
+        except Exception:
+            pass
+        # Draw detection bboxes on ekf_img colored by state (SAFE/CAUTION/RISK)
+        try:
+            ekf_img = bev_risk_manager.draw_detections_on_image(ekf_img, detections)
+        except Exception:
+            pass
         gt_steps = 20  # number of future frames to visualize
         objs_now = gt_frame_map.get(frame_idx - 1, [])
 

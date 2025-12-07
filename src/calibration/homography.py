@@ -67,17 +67,7 @@ class Homography:
         self._bev_w = None
         self._bev_h = None
 
-        # If calibration image size not provided, infer an approximate size from intrinsics
-        # using principal point (cx, cy). This gives a sensible default for scaling.
-        if calib_image_size is None:
-            try:
-                approx_w = int(round(self.cx * 2.0))
-                approx_h = int(round(self.cy * 2.0))
-                self.calib_image_size = (approx_w, approx_h)
-            except Exception:
-                self.calib_image_size = None
-        else:
-            self.calib_image_size = calib_image_size
+        self.calib_image_size = calib_image_size
         self._intrinsics_scaled_for = None
 
     def _create_bev_grid(self):
@@ -128,45 +118,7 @@ class Homography:
         self._bev_w = bev_w
         self._bev_h = bev_h
 
-    def _scale_intrinsics_for_image(self, image_shape: tuple):
-        if self.calib_image_size is None:
-            return
-
-        img_h, img_w = image_shape
-        calib_w, calib_h = self.calib_image_size
-        if (img_w, img_h) == (calib_w, calib_h):
-            return
-        if self._intrinsics_scaled_for == (img_w, img_h):
-            return
-
-        scale_x = float(img_w) / float(calib_w)
-        scale_y = float(img_h) / float(calib_h)
-
-        self.K = self.K.copy()
-        self.K[0, 0] = self.K[0, 0] * scale_x
-        self.K[1, 1] = self.K[1, 1] * scale_y
-        self.K[0, 2] = self.K[0, 2] * scale_x
-        self.K[1, 2] = self.K[1, 2] * scale_y
-
-        self.fx = self.K[0, 0]
-        self.fy = self.K[1, 1]
-        self.cx = self.K[0, 2]
-        self.cy = self.K[1, 2]
-
-        self._map_x = None
-        self._map_y = None
-        self._bev_w = None
-        self._bev_h = None
-
-        self._intrinsics_scaled_for = (img_w, img_h)
-
     def warp(self, image_bgr: np.ndarray, border_value=(0, 0, 0)) -> np.ndarray:
-        if image_bgr is not None:
-            try:
-                img_h, img_w = image_bgr.shape[:2]
-                self._scale_intrinsics_for_image((img_h, img_w))
-            except Exception:
-                pass
 
         if self._map_x is None or self._map_y is None:
             self._build_bev_remap()
@@ -185,24 +137,14 @@ class Homography:
         if self._map_x is None or self._map_y is None:
             self._build_bev_remap()
 
-        # Only consider valid remap cells (map_x/map_y >= 0)
-        valid_mask = (self._map_x >= 0) & (self._map_y >= 0)
-        if not np.any(valid_mask):
-            return -1, -1
+        diff_x = np.abs(self._map_x - u)
+        diff_y = np.abs(self._map_y - v)
 
-        # compute Euclidean distance on valid cells only
-        dx = (self._map_x - float(u))
-        dy = (self._map_y - float(v))
-        dist_sq = dx * dx + dy * dy
+        score = diff_x + diff_y
+        bev_x, bev_y = np.unravel_index(np.argmin(score), score.shape)
 
-        # set invalid cells to a large value so they are ignored by argmin
-        dist_sq[~valid_mask] = 1e12
-
-        bev_x, bev_y = np.unravel_index(np.argmin(dist_sq), dist_sq.shape)
-        min_dist = float(dist_sq[bev_x, bev_y]) ** 0.5
-
-        # threshold (px): if nearest mapped pixel is too far, treat as invalid
-        if min_dist > 10.0:
+        min_score = score[bev_x, bev_y]
+        if min_score > 5:
             return -1, -1
 
         return int(bev_x), int(bev_y)
