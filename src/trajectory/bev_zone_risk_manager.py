@@ -150,7 +150,7 @@ class PedestrianStateManager:
         self.prediction_samples = int(rzm_cfg.get("prediction_samples", 5))
         # how many frames to hold before demoting RISK -> CAUTION
         self.risk_to_caution_hold = int(rzm_cfg.get("risk_to_caution_hold", 2))
-        
+
     def world_to_bev(self, world_pos: Tuple[float, float], flipped: bool = True) -> Tuple[int, int]:
         """Convert world (x_m, y_m) to BEV pixel (row, col).
 
@@ -214,6 +214,15 @@ class PedestrianStateManager:
 
         front_m = float(np.clip(speed, float(min_front), float(max_front)))
         self.set_zones_from_params(front_m=front_m, width_m=width_m, vehicle_bev=vehicle_bev)
+
+    def compute_vehicle_bev(self, img: Optional[np.ndarray] = None, H: Optional["Homography"] = None,) -> Tuple[int, int]:
+        """Compute vehicle BEV pixel (row, col)."""
+
+        h_img, w_img = img.shape[:2]
+        u_px = float(w_img / 2.0)
+        v_px = float(h_img - 1)
+        return H.pixel_to_bev_warp(u_px, v_px)
+
 
     def _ensure_object(self, object_id: int):
         if object_id not in self.tracked_objects:

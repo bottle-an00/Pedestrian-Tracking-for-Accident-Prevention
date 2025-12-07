@@ -15,7 +15,7 @@ test_data_dir:
     calib_LiDAR_Imu: tests/test_data/calib_LidarToImu.txt
     initial_location: tests/test_data/pos_ENU0.txt
 
-dataset_id: "063"
+dataset_id: "033"
 root: data/raw/${dataset_id}
 
 dataset_dir:
@@ -54,7 +54,7 @@ risk_zone_manager:
   exit_threshold: 3
   history_len: 20
   # defaults for BEV risk zone generation (used by PedestrianStateManager.set_zones_from_gps)
-  width_m: 1.25
+  width_m: 1.0
   min_front: 8.0
   max_front: 15.0
   # how many prediction samples to consider when evaluating worst-case severity
