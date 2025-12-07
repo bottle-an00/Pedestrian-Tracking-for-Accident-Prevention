@@ -94,9 +94,13 @@ class RealTimeProcessor:
         # GT 로더
         self.gt_loader = GTLoader(target_classes=["pedestrian"])
 
-        # Trajectory 버퍼 (Pred/GT)
+        # Trajectory 버퍼 (Pred/GT) - BEV용
         self.pred_trajectory = TrajectoryBuffer(max_length=50)
         self.gt_trajectory: Dict[int, List] = {}  # {track_id: [(bev_x, bev_y), ...]}
+
+        # Trajectory 버퍼 (Pred/GT) - 카메라 뷰용 (foot_uv 좌표)
+        self.pred_trajectory_uv: Dict[int, List] = {}  # {track_id: [(u, v), ...]}
+        self.gt_trajectory_uv: Dict[int, List] = {}  # {track_id: [(u, v), ...]}
 
         # EKF Manager (Pred trajectory 필터링)
         self.ekf_manager = EKFManager()
@@ -121,6 +125,8 @@ class RealTimeProcessor:
 
         try:
             self.dataset = DatasetLoader(seq_dir)
+            # GPS 파일 로드 결과 확인
+            print(f"[DEBUG] GPS files loaded: {len(self.dataset.gps_files)}")
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -187,6 +193,8 @@ class RealTimeProcessor:
         # Trajectory 초기화
         self.pred_trajectory.clear()
         self.gt_trajectory = {}
+        self.pred_trajectory_uv = {}
+        self.gt_trajectory_uv = {}
         self.ekf_manager = EKFManager()
         self.ekf_trajectory = {}
 
@@ -197,11 +205,24 @@ class RealTimeProcessor:
             )
 
         # GT 라벨 디렉토리 탐색
+        # 원천데이터 경로에서 라벨링데이터 경로로 변환
+        # .../원천데이터/13_전방 보행자_val/053/ -> .../라벨링데이터/13_전방 보행자_val/053/image0/
         self.image_label_dir = None
+
+        # 방법 1: 시퀀스 내부 label/Camera0 (기존 방식)
         label_dir = self.seq_path / "label" / "Camera0"
         if label_dir.exists():
             self.image_label_dir = label_dir
             print(f"GT 라벨 디렉토리: {label_dir}")
+        else:
+            # 방법 2: 원천데이터 -> 라벨링데이터 경로 변환
+            seq_path_str = str(self.seq_path)
+            if "원천데이터" in seq_path_str:
+                label_path_str = seq_path_str.replace("원천데이터", "라벨링데이터")
+                label_dir = Path(label_path_str) / "image0"
+                if label_dir.exists():
+                    self.image_label_dir = label_dir
+                    print(f"GT 라벨 디렉토리: {label_dir}")
 
         return {
             "success": True,
@@ -238,6 +259,38 @@ class RealTimeProcessor:
             if 'keypoints' in det and det['keypoints']:
                 det['keypoints'] = [(kp[0], kp[1]) for kp in det['keypoints']]
 
+        # Pred foot_uv trajectory 누적 (카메라 뷰용)
+        img_h, img_w = img_full.shape[:2]
+        for det in detections:
+            if det['class'] == 'person':
+                tid = det['id']
+                foot_uv = det.get('foot_uv', [])
+                bbox = det.get('bbox', [])
+
+                if len(foot_uv) >= 2:
+                    fu, fv = foot_uv[0], foot_uv[1]
+
+                    # foot_uv가 bbox에서 너무 멀리 떨어져 있으면 로그 출력
+                    if len(bbox) >= 4:
+                        bx, by, bw, bh = bbox
+                        bbox_cx = bx + bw / 2
+                        bbox_bottom = by + bh
+                        dist_from_bbox = ((fu - bbox_cx)**2 + (fv - bbox_bottom)**2)**0.5
+
+                        # bbox 높이의 2배 이상 떨어져 있으면 경고
+                        if dist_from_bbox > bh * 2:
+                            print(f"[WARN] foot_uv 이상! ID:{tid} frame:{self.frame_idx}")
+                            print(f"  foot_uv=({fu:.1f}, {fv:.1f}), bbox_bottom=({bbox_cx:.1f}, {bbox_bottom:.1f})")
+                            print(f"  distance={dist_from_bbox:.1f}, bbox_h={bh:.1f}")
+                            print(f"  foot_uv_type={det.get('foot_uv_type')}")
+
+                    if tid not in self.pred_trajectory_uv:
+                        self.pred_trajectory_uv[tid] = []
+                    self.pred_trajectory_uv[tid].append((fu, fv))
+                    # 최대 50개 유지
+                    if len(self.pred_trajectory_uv[tid]) > 50:
+                        self.pred_trajectory_uv[tid] = self.pred_trajectory_uv[tid][-50:]
+
         # GT 로드 (있는 경우)
         gt_objects = []
         if self.image_label_dir:
@@ -247,14 +300,44 @@ class RealTimeProcessor:
                 if gt_json.exists():
                     gt_frame = self.gt_loader.load_frame(gt_json)
                     gt_objects = gt_frame.get_pedestrians()
+
+                    # 디버그: 첫 프레임에서 GT 정보 출력
+                    if self.frame_idx == 0 and gt_objects:
+                        print(f"[DEBUG] GT 로드됨: {len(gt_objects)}개")
+                        for gt in gt_objects[:2]:  # 처음 2개만
+                            print(f"  - track_id={gt.track_id}, foot_uv={gt.foot_uv}, bbox={gt.bbox}")
+
+                    # GT foot_uv trajectory 누적 (카메라 뷰용)
+                    for gt in gt_objects:
+                        foot_uv = getattr(gt, 'foot_uv', None)
+                        tid = getattr(gt, 'track_id', None) or getattr(gt, 'instance_id', None)
+                        if foot_uv is not None and len(foot_uv) >= 2 and tid is not None:
+                            if tid not in self.gt_trajectory_uv:
+                                self.gt_trajectory_uv[tid] = []
+                            self.gt_trajectory_uv[tid].append((foot_uv[0], foot_uv[1]))
+                            # 최대 50개 유지
+                            if len(self.gt_trajectory_uv[tid]) > 50:
+                                self.gt_trajectory_uv[tid] = self.gt_trajectory_uv[tid][-50:]
+                else:
+                    if self.frame_idx == 0:
+                        print(f"[DEBUG] GT 파일 없음: {gt_json}")
             except Exception as e:
                 print(f"GT 로드 에러: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            if self.frame_idx == 0:
+                print(f"[DEBUG] image_label_dir 없음")
 
         # BEV 해상도
         bev_resolution = float(self.cfg['bev']['resolution'])
 
         # GPS 데이터 로드 및 동적 risk zone 업데이트
         gps_data = self.dataset.get_gps_for_frame(self.frame_idx)
+        if self.frame_idx == 0:
+            print(f"[DEBUG] GPS data for frame 0: {gps_data is not None}")
+            if gps_data:
+                print(f"[DEBUG] GPS vel_x={gps_data.vel_x:.2f}, vel_y={gps_data.vel_y:.2f}")
         if gps_data and self.risk_zone_manager:
             try:
                 # GPS 속도 기반으로 risk zone 크기 동적 조절
@@ -280,9 +363,19 @@ class RealTimeProcessor:
                 img_h, img_w = img_full.shape[:2]
 
                 # 차량 위치 계산 (이미지 하단 중앙 -> BEV 좌표)
-                vehicle_bev = self.homography.pixel_to_bev_warp(
-                    float(img_w / 2.0), float(img_h - 1)
-                )
+                # 하단이 BEV 범위 밖이면 위로 올라가면서 유효한 좌표 탐색
+                vehicle_bev = (-1, -1)
+                for offset in range(0, 400, 50):
+                    test_v = float(img_h - 1 - offset)
+                    bev_result = self.homography.pixel_to_bev_warp(
+                        float(img_w / 2.0), test_v
+                    )
+                    if bev_result[0] >= 0 and bev_result[1] >= 0:
+                        vehicle_bev = bev_result
+                        if self.frame_idx == 0 and offset > 0:
+                            print(f"[DEBUG] vehicle_bev fallback: offset={offset}px")
+                        break
+
                 if self.frame_idx == 0:
                     print(f"[DEBUG] vehicle_bev: {vehicle_bev}, bev_shape: {bev.shape}, img_shape: {img_full.shape}")
 
@@ -418,7 +511,7 @@ class RealTimeProcessor:
                 # GT trajectory 시각화 (초록색)
                 if self.gt_trajectory:
                     bev_vis = self.visualizer.draw_gt_trajectory_on_bev(
-                        bev_vis, self.gt_trajectory
+                        bev_vis, self.gt_trajectory, color=(0, 255, 0)
                     )
 
                 # 카메라 뷰에 risk zone 시각화 (test_full_pipeline 방식)
@@ -437,17 +530,53 @@ class RealTimeProcessor:
                         import traceback
                         traceback.print_exc()
 
-                # 기존 keypoint/bbox/foot_uv 시각화 (항상 수행)
-                camera_vis = self.visualizer.draw_on_img_with_keypoints(
-                    camera_vis, detections,
-                    seq_name=self.seq_path.name if self.seq_path else None,
-                    show_legend=False,
-                    max_width=9999  # 리사이즈 안 함
-                )
+                # bbox/keypoint 시각화 (상태별 색상 적용)
+                if self.risk_zone_manager and pedestrian_states:
+                    # RiskZoneManager의 draw_detections_on_image 사용 (상태별 bbox 색상)
+                    camera_vis = self.risk_zone_manager.draw_detections_on_image(
+                        camera_vis, detections,
+                        state_getter=lambda tid: pedestrian_states.get(tid, "SAFE")
+                    )
+                else:
+                    # fallback: 기존 시각화
+                    camera_vis = self.visualizer.draw_on_img_with_keypoints(
+                        camera_vis, detections,
+                        seq_name=self.seq_path.name if self.seq_path else None,
+                        show_legend=False,
+                        max_width=9999
+                    )
 
-                # GT foot_uv 시각화
+                # foot_uv 시각화 (pred: 파란색, out_of_fov: 주황색)
+                for det in detections:
+                    if det['class'] == 'person':
+                        foot_uv = det.get('foot_uv', [])
+                        foot_type = det.get('foot_uv_type', 'detected')
+                        if len(foot_uv) == 2:
+                            fu, fv = int(foot_uv[0]), int(foot_uv[1])
+                            img_h, img_w = camera_vis.shape[:2]
+                            if foot_type == "out_of_fov":
+                                u = max(0, min(fu, img_w - 1))
+                                v = max(0, min(fv, img_h - 1))
+                                cv2.circle(camera_vis, (u, v), 8, (0, 165, 255), -1)  # 주황색
+                            else:
+                                if 0 <= fu < img_w and 0 <= fv < img_h:
+                                    cv2.circle(camera_vis, (fu, fv), 8, (255, 0, 0), -1)  # 파란색 (BGR)
+
+                # GT foot_uv 시각화 (현재 프레임, 초록색)
                 if gt_objects:
-                    camera_vis = self.visualizer.draw_gt_foot_uv(camera_vis, gt_objects)
+                    camera_vis = self.visualizer.draw_gt_foot_uv(camera_vis, gt_objects, color=(0, 255, 0))
+
+                # 카메라 뷰에 Pred trajectory 시각화 (누적, 파란색)
+                if self.pred_trajectory_uv:
+                    camera_vis = self.visualizer.draw_trajectory_on_image(
+                        camera_vis, self.pred_trajectory_uv, color=(255, 0, 0)
+                    )
+
+                # 카메라 뷰에 GT trajectory 시각화 (누적, 초록색)
+                if self.gt_trajectory_uv:
+                    camera_vis = self.visualizer.draw_gt_trajectory_on_image(
+                        camera_vis, self.gt_trajectory_uv, color=(0, 255, 0)
+                    )
 
             except Exception as e:
                 print(f"BEV 에러: {e}")
@@ -458,10 +587,23 @@ class RealTimeProcessor:
         if bev_vis is None:
             camera_vis = self.visualizer.draw_on_img_with_keypoints(
                 camera_vis, detections,
-                seq_name=self.seq_path.name if self.seq_path else None
+                seq_name=self.seq_path.name if self.seq_path else None,
+                show_legend=False
             )
             if gt_objects:
                 camera_vis = self.visualizer.draw_gt_foot_uv(camera_vis, gt_objects)
+
+            # 카메라 뷰에 Pred trajectory 시각화 (누적)
+            if self.pred_trajectory_uv:
+                camera_vis = self.visualizer.draw_trajectory_on_image(
+                    camera_vis, self.pred_trajectory_uv
+                )
+
+            # 카메라 뷰에 GT trajectory 시각화 (누적, 마젠타색)
+            if self.gt_trajectory_uv:
+                camera_vis = self.visualizer.draw_gt_trajectory_on_image(
+                    camera_vis, self.gt_trajectory_uv
+                )
 
         # base64 인코딩 (웹 전송용)
         def encode_image(img_to_encode, quality=85):
@@ -476,6 +618,14 @@ class RealTimeProcessor:
         except NameError:
             caution_count = 0
 
+        # GPS 속도 정보 (km/h로 변환)
+        # GPS 데이터 없으면 0으로 표시 (멈춰있거나 GPS 없음)
+        vehicle_speed = 0.0
+        if gps_data:
+            # vel_x, vel_y로 2D 속도 계산 (m/s -> km/h)
+            speed_ms = (gps_data.vel_x**2 + gps_data.vel_y**2)**0.5
+            vehicle_speed = round(speed_ms * 3.6, 1)  # m/s -> km/h
+
         return {
             "camera": encode_image(camera_vis),
             "bev": encode_image(bev_vis),
@@ -487,7 +637,8 @@ class RealTimeProcessor:
                 "in_risk_zone": pedestrians_in_risk,
                 "in_caution_zone": caution_count,
                 "closest_distance": round(closest_distance, 2) if closest_distance else None
-            }
+            },
+            "vehicle_speed": vehicle_speed
         }
 
     def next_frame(self) -> dict:

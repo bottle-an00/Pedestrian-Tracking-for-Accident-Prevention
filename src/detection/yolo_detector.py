@@ -239,13 +239,32 @@ class YoloDetector:
         left_ankle = kpts[15]
         right_ankle = kpts[16]
 
-        # conf >= keypoint_conf_threshold 이면 유효
-        left_ankle_valid = float(left_ankle[2]) >= self.keypoint_conf_threshold
-        right_ankle_valid = float(right_ankle[2]) >= self.keypoint_conf_threshold
-
-        # 각 발목이 이미지 범위 안에 있는지 체크
+        # 각 발목 좌표
         la_x, la_y = float(left_ankle[0]), float(left_ankle[1])
         ra_x, ra_y = float(right_ankle[0]), float(right_ankle[1])
+
+        # bbox 정보
+        bbox_cx = (x1 + x2) / 2.0
+        bbox_height = y2 - y1
+        bbox_width = x2 - x1
+
+        # keypoint가 유효한지 판단:
+        # 1) conf >= threshold
+        # 2) bbox에서 너무 멀리 떨어지지 않음 (bbox 크기의 3배 이내)
+        #    -> YOLO가 (0,0)으로 반환하는 경우 bbox에서 매우 멀리 떨어짐
+        max_dist = max(bbox_height, bbox_width) * 3
+
+        def is_keypoint_valid(kpt_x, kpt_y, kpt_conf):
+            if kpt_conf < self.keypoint_conf_threshold:
+                return False
+            # bbox 중심에서 거리 체크
+            dist_from_bbox = ((kpt_x - bbox_cx)**2 + (kpt_y - y2)**2)**0.5
+            return dist_from_bbox < max_dist
+
+        left_ankle_valid = is_keypoint_valid(la_x, la_y, float(left_ankle[2]))
+        right_ankle_valid = is_keypoint_valid(ra_x, ra_y, float(right_ankle[2]))
+
+        # 각 발목이 이미지 범위 안에 있는지 체크
         left_ankle_in_fov = 0 <= la_x <= img_w and 0 <= la_y <= img_h
         right_ankle_in_fov = 0 <= ra_x <= img_w and 0 <= ra_y <= img_h
 
@@ -293,10 +312,19 @@ class YoloDetector:
         lowest_visible_idx = None
         lowest_visible_name = None
 
+        # bbox 정보로 유효성 판단
+        bbox_cx = (x1 + x2) / 2.0
+        bbox_width = x2 - x1
+        max_dist = max(bbox_height, bbox_width) * 3
+
         for idx, name in self.LOWER_BODY_KEYPOINTS:
             kpt = kpts[idx]  # [x, y, conf]
-            # conf >= threshold 이면 유효
-            if float(kpt[2]) >= self.keypoint_conf_threshold:
+            kpt_x, kpt_y = float(kpt[0]), float(kpt[1])
+            kpt_conf = float(kpt[2])
+
+            # conf >= threshold 이고, bbox에서 너무 멀리 떨어지지 않아야 유효
+            dist_from_bbox = ((kpt_x - bbox_cx)**2 + (kpt_y - y2)**2)**0.5
+            if kpt_conf >= self.keypoint_conf_threshold and dist_from_bbox < max_dist:
                 if lowest_visible is None or kpt[1] > lowest_visible[1]:
                     lowest_visible = kpt
                     lowest_visible_idx = idx

@@ -429,3 +429,75 @@ class Visualizer:
                                 color, 1)
 
         return vis_img
+
+    def draw_trajectory_on_image(self, img, trajectories, color=None):
+        """
+        Pred foot_uv trajectory를 카메라 이미지에 시각화
+
+        Args:
+            img: 카메라 이미지
+            trajectories: {track_id: [(u, v), ...], ...}
+            color: 고정 색상 (None이면 ID별 색상)
+        """
+        vis_img = img.copy()
+        img_h, img_w = vis_img.shape[:2]
+
+        for tid, points in trajectories.items():
+            if len(points) < 2:
+                continue
+
+            # 색상 결정 (고정 or ID별)
+            line_color = color if color is not None else self.id_to_color(tid)
+
+            # 유효한 점들만 필터링
+            valid_pts = []
+            for u, v in points:
+                if 0 <= u < img_w and 0 <= v < img_h:
+                    valid_pts.append((int(u), int(v)))
+
+            if len(valid_pts) < 2:
+                continue
+
+            pts = np.array(valid_pts, dtype=np.int32)
+            cv2.polylines(vis_img, [pts], isClosed=False, color=line_color, thickness=2)
+
+            # 마지막 점에 원 표시
+            if len(pts) > 0:
+                cv2.circle(vis_img, tuple(pts[-1]), 6, line_color, -1)
+
+        return vis_img
+
+    def draw_gt_trajectory_on_image(self, img, trajectories, color=(255, 0, 255)):
+        """
+        GT foot_uv trajectory를 카메라 이미지에 시각화 (마젠타색)
+
+        Args:
+            img: 카메라 이미지
+            trajectories: {track_id: [(u, v), ...], ...}
+            color: 기본 색상 (마젠타)
+        """
+        vis_img = img.copy()
+        img_h, img_w = vis_img.shape[:2]
+
+        for tid, points in trajectories.items():
+            if len(points) < 2:
+                continue
+
+            # 유효한 점들만 필터링
+            valid_pts = []
+            for u, v in points:
+                if 0 <= u < img_w and 0 <= v < img_h:
+                    valid_pts.append((int(u), int(v)))
+
+            if len(valid_pts) < 2:
+                continue
+
+            pts = np.array(valid_pts, dtype=np.int32)
+            cv2.polylines(vis_img, [pts], isClosed=False, color=color, thickness=2)
+
+            # 마지막 점에 다이아몬드 마커 표시
+            if len(pts) > 0:
+                cv2.drawMarker(vis_img, tuple(pts[-1]), color,
+                               cv2.MARKER_DIAMOND, 12, 2)
+
+        return vis_img

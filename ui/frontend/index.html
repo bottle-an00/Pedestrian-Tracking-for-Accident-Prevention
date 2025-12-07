@@ -198,6 +198,17 @@
 
                 <hr class="border-[#2a2a3a]">
 
+                <!-- Vehicle Info -->
+                <div class="space-y-3">
+                    <label class="text-sm text-gray-400 block">Vehicle Info</label>
+                    <div class="bg-[#1a1a24] rounded-lg p-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500 text-sm">Speed</span>
+                            <span id="vehicle-speed" class="font-medium text-cyan-400 text-lg">- km/h</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Detection Info -->
                 <div class="space-y-3">
                     <label class="text-sm text-gray-400 block">Detection Info</label>
@@ -229,15 +240,15 @@
         <main class="flex-1 p-6">
             <div id="video-grid" class="grid grid-cols-2 gap-6 h-[calc(100vh-120px)]">
                 <!-- Camera View -->
-                <div id="camera-panel" class="bg-[#121218] rounded-xl border border-[#1f1f2e] overflow-hidden neon-border video-panel" onclick="openModal('camera')">
-                    <div class="bg-[#1a1a24] px-4 py-3 border-b border-[#2a2a3a] flex items-center justify-between">
+                <div id="camera-panel" class="bg-[#121218] rounded-xl border border-[#1f1f2e] overflow-hidden neon-border video-panel flex flex-col">
+                    <div class="bg-[#1a1a24] px-4 py-3 border-b border-[#2a2a3a] flex items-center justify-between" onclick="openModal('camera')">
                         <div class="flex items-center gap-2">
                             <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                             <span class="font-medium">Camera View</span>
                         </div>
                         <span class="text-xs text-gray-500">Click to enlarge</span>
                     </div>
-                    <div class="aspect-video bg-black flex items-center justify-center">
+                    <div class="flex-1 bg-black flex items-center justify-center" onclick="openModal('camera')">
                         <img id="camera-frame" class="w-full h-full object-contain hidden" src="" alt="Camera View">
                         <div id="camera-placeholder" class="text-gray-600 text-center">
                             <svg class="w-16 h-16 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -246,24 +257,90 @@
                             <p>Load a sequence to start</p>
                         </div>
                     </div>
+                    <!-- Camera Legend -->
+                    <div id="camera-legend" class="bg-[#1a1a24] px-4 py-3 border-t border-[#2a2a3a] text-sm hidden">
+                        <div class="flex flex-wrap gap-5 items-center">
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded-full bg-blue-500"></div>
+                                <span class="text-gray-300">foot_uv (pred)</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 bg-green-500" style="transform: rotate(45deg);"></div>
+                                <span class="text-gray-300">foot_uv (GT)</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded-full bg-orange-400"></div>
+                                <span class="text-gray-300">out_of_fov</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-1 bg-blue-500 rounded"></div>
+                                <span class="text-gray-300">pred traj</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-1 bg-green-500 rounded"></div>
+                                <span class="text-gray-300">GT traj</span>
+                            </div>
+                            <div class="flex items-center gap-2 ml-4 border-l border-[#3a3a4a] pl-4">
+                                <div class="w-4 h-4 rounded border-2 border-blue-500 bg-gray-600 opacity-60"></div>
+                                <span class="text-gray-300">SAFE</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded border-2 border-blue-500 bg-orange-400 opacity-60"></div>
+                                <span class="text-gray-300">CAUTION</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded border-2 border-blue-500 bg-red-500 opacity-60"></div>
+                                <span class="text-gray-300">RISK</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- BEV View -->
-                <div id="bev-panel" class="bg-[#121218] rounded-xl border border-[#1f1f2e] overflow-hidden neon-border video-panel" onclick="openModal('bev')">
-                    <div class="bg-[#1a1a24] px-4 py-3 border-b border-[#2a2a3a] flex items-center justify-between">
+                <div id="bev-panel" class="bg-[#121218] rounded-xl border border-[#1f1f2e] overflow-hidden neon-border video-panel flex flex-col">
+                    <div class="bg-[#1a1a24] px-4 py-3 border-b border-[#2a2a3a] flex items-center justify-between" onclick="openModal('bev')">
                         <div class="flex items-center gap-2">
                             <div class="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
                             <span class="font-medium">Bird's Eye View (BEV)</span>
                         </div>
                         <span class="text-xs text-gray-500">Click to enlarge</span>
                     </div>
-                    <div class="aspect-video bg-black flex items-center justify-center">
+                    <div class="flex-1 bg-black flex items-center justify-center" onclick="openModal('bev')">
                         <img id="bev-frame" class="w-full h-full object-contain hidden" src="" alt="BEV View">
                         <div id="bev-placeholder" class="text-gray-600 text-center">
                             <svg class="w-16 h-16 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
                             </svg>
                             <p>BEV Transform</p>
+                        </div>
+                    </div>
+                    <!-- BEV Legend -->
+                    <div id="bev-legend" class="bg-[#1a1a24] px-4 py-3 border-t border-[#2a2a3a] text-sm hidden">
+                        <div class="flex flex-wrap gap-5 items-center">
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded bg-red-500 opacity-60"></div>
+                                <span class="text-gray-300">RISK zone</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded bg-yellow-400 opacity-60"></div>
+                                <span class="text-gray-300">CAUTION zone</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded bg-green-400 opacity-60"></div>
+                                <span class="text-gray-300">SAFE zone</span>
+                            </div>
+                            <div class="flex items-center gap-2 ml-4 border-l border-[#3a3a4a] pl-4">
+                                <div class="w-8 h-1 bg-blue-500 rounded"></div>
+                                <span class="text-gray-300">pred traj</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-1 bg-green-500 rounded"></div>
+                                <span class="text-gray-300">GT traj</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-1 bg-blue-800 rounded"></div>
+                                <span class="text-gray-300">future pred</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -615,6 +692,10 @@
                         document.getElementById('kpt-threshold').textContent = data.model_info.keypoint_threshold || '-';
                         document.getElementById('input-size').textContent = data.model_info.imgsz || '-';
                     }
+
+                    // 범례 표시 (시퀀스 로드 성공 시)
+                    document.getElementById('camera-legend').classList.remove('hidden');
+                    document.getElementById('bev-legend').classList.remove('hidden');
                 }
             } else if (data.type === 'frame') {
                 updateFrame(data);
@@ -656,6 +737,13 @@
                 } else {
                     setAlertStatus('safe');
                 }
+            }
+
+            // 차량 속도 업데이트 (GPS 없거나 정지시 0 km/h 표시)
+            if (data.vehicle_speed !== null && data.vehicle_speed !== undefined) {
+                document.getElementById('vehicle-speed').textContent = data.vehicle_speed + ' km/h';
+            } else {
+                document.getElementById('vehicle-speed').textContent = '0 km/h';
             }
         }
 
