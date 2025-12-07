@@ -1,8 +1,18 @@
 import numpy as np
 
 class EKFTracker:
-    def __init__(self, initial_pos, dt=0.05):
-        self.dt = dt
+    def __init__(self, initial_pos, dt=1.0, q: float = 0.5, R_scale: float = 3.0):
+        """Constant-acceleration EKF tracker.
+
+        Args:
+            initial_pos: tuple (x,y)
+            dt: time step (frames -> seconds unitless here)
+            q: process noise scale multiplier
+            R_scale: measurement noise scale (multiplies identity)
+        """
+        self.dt = float(dt)
+        self._q_scale = float(q)
+        self._R_scale = float(R_scale)
 
         self.x = np.array([initial_pos[0], initial_pos[1],
                            0.0, 0.0,
@@ -15,9 +25,9 @@ class EKFTracker:
             [0, 1, 0, 0, 0, 0]
         ], dtype=np.float32)
 
-        self.R = np.eye(2, dtype=np.float32) * 3
+        self.R = np.eye(2, dtype=np.float32) * float(self._R_scale)
 
-        self._update_F_Q(dt)
+        self._update_F_Q(self.dt)
 
     def _update_F_Q(self, dt):
         self.F = np.array([
@@ -28,8 +38,7 @@ class EKFTracker:
             [0, 0, 0,  0, 1, 0],
             [0, 0, 0,  0, 0, 1]
         ], dtype=np.float32)
-
-        q = 0.5
+        q = float(self._q_scale)
         self.Q = q * np.array([
             [dt**4/4,    0,         dt**3/2,   0,        dt**2/2, 0],
             [0,       dt**4/4,     0,         dt**3/2,   0,        dt**2/2],
@@ -70,3 +79,11 @@ class EKFTracker:
         self.P = P_backup
 
         return preds
+
+    def set_velocity(self, vx: float, vy: float):
+        """Set internal velocity state (vx, vy)."""
+        try:
+            self.x[2] = float(vx)
+            self.x[3] = float(vy)
+        except Exception:
+            pass
