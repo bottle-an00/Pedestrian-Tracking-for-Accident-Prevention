@@ -10,7 +10,7 @@ class ByteTracker:
     YOLO + ByteTrack 기반 트래킹 모듈
     """
 
-    def __init__(self, model_path, conf_thres_config, target_class_names=None, imgsz=640, half=True):
+    def __init__(self, model_path, conf_thres_config, target_class_names=None, imgsz=640, half=True, keypoint_conf_threshold=None):
         """
         Args:
             model_path: YOLO 모델 경로
@@ -18,9 +18,13 @@ class ByteTracker:
             target_class_names: ['person', 'car'] 등
             imgsz: YOLO 입력 이미지 사이즈
             half: FP16 사용 여부 (메모리 절약)
+            keypoint_conf_threshold: keypoint confidence threshold (None이면 기본값 사용)
         """
         # YoloDetector 생성 (half precision 전달)
-        self._detector = YoloDetector(model_path, conf_thres_config, target_class_names, imgsz, half=half)
+        self._detector = YoloDetector(
+            model_path, conf_thres_config, target_class_names, imgsz,
+            half=half, keypoint_conf_threshold=keypoint_conf_threshold
+        )
 
         # detector에서 필요한 속성 참조
         self.model = self._detector.model

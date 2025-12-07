@@ -29,10 +29,10 @@ class YoloDetector:
         (11, 'left_hip'), (12, 'right_hip')
     ]
 
-    # Keypoint confidence threshold (Ultralytics 기본값 0.5 대신 0.3 사용)
-    KEYPOINT_CONF_THRESHOLD = 0.3
+    # Keypoint confidence threshold 기본값 (yaml에서 override 가능)
+    DEFAULT_KEYPOINT_CONF_THRESHOLD = 0.3
 
-    def __init__(self, model_path, conf_thres_config, target_class_names=None, imgsz=640, half=True):
+    def __init__(self, model_path, conf_thres_config, target_class_names=None, imgsz=640, half=True, keypoint_conf_threshold=None):
         """
         Args:
             model_path: YOLO 모델 경로
@@ -40,8 +40,15 @@ class YoloDetector:
             target_class_names: ['person', 'car'] 등
             imgsz: YOLO 입력 이미지 사이즈
             half: FP16 사용 여부 (메모리 절약, GPU만 해당)
+            keypoint_conf_threshold: keypoint confidence threshold (None이면 기본값 0.3 사용)
         """
         self.model = YOLO(model_path)
+
+        # Keypoint confidence threshold 설정 (yaml에서 주입 가능)
+        self.keypoint_conf_threshold = (
+            keypoint_conf_threshold if keypoint_conf_threshold is not None
+            else self.DEFAULT_KEYPOINT_CONF_THRESHOLD
+        )
         self.names = self.model.names
         self.imgsz = imgsz
         self.conf_thres_config = conf_thres_config
@@ -232,9 +239,9 @@ class YoloDetector:
         left_ankle = kpts[15]
         right_ankle = kpts[16]
 
-        # conf >= KEYPOINT_CONF_THRESHOLD 이면 유효 (기존 0.5 대신 0.3)
-        left_ankle_valid = float(left_ankle[2]) >= self.KEYPOINT_CONF_THRESHOLD
-        right_ankle_valid = float(right_ankle[2]) >= self.KEYPOINT_CONF_THRESHOLD
+        # conf >= keypoint_conf_threshold 이면 유효
+        left_ankle_valid = float(left_ankle[2]) >= self.keypoint_conf_threshold
+        right_ankle_valid = float(right_ankle[2]) >= self.keypoint_conf_threshold
 
         # 각 발목이 이미지 범위 안에 있는지 체크
         la_x, la_y = float(left_ankle[0]), float(left_ankle[1])
@@ -289,7 +296,7 @@ class YoloDetector:
         for idx, name in self.LOWER_BODY_KEYPOINTS:
             kpt = kpts[idx]  # [x, y, conf]
             # conf >= threshold 이면 유효
-            if float(kpt[2]) >= self.KEYPOINT_CONF_THRESHOLD:
+            if float(kpt[2]) >= self.keypoint_conf_threshold:
                 if lowest_visible is None or kpt[1] > lowest_visible[1]:
                     lowest_visible = kpt
                     lowest_visible_idx = idx

@@ -13,6 +13,49 @@
         .danger-glow { box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
         .safe-glow { box-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
         .tab-active { border-bottom: 2px solid #06b6d4; color: #06b6d4; }
+        .video-panel { cursor: pointer; transition: transform 0.2s; }
+        .video-panel:hover { transform: scale(1.01); }
+
+        /* 모달 스타일 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            cursor: pointer;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-content {
+            max-width: 95vw;
+            max-height: 95vh;
+            object-fit: contain;
+        }
+        .modal-title {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 600;
+            background: rgba(0,0,0,0.7);
+            padding: 8px 20px;
+            border-radius: 8px;
+        }
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-[#0a0a0f] text-white min-h-screen">
@@ -52,6 +95,19 @@
                 </button>
             </div>
 
+            <!-- View Mode Toggle -->
+            <div class="flex items-center gap-2 bg-[#1a1a24] rounded-lg p-1">
+                <button id="view-dual" onclick="setViewMode('dual')" class="px-3 py-1.5 text-xs font-medium rounded bg-cyan-600 text-white">
+                    Dual
+                </button>
+                <button id="view-camera" onclick="setViewMode('camera')" class="px-3 py-1.5 text-xs font-medium rounded text-gray-400 hover:text-white hover:bg-[#252532]">
+                    Camera
+                </button>
+                <button id="view-bev" onclick="setViewMode('bev')" class="px-3 py-1.5 text-xs font-medium rounded text-gray-400 hover:text-white hover:bg-[#252532]">
+                    BEV
+                </button>
+            </div>
+
             <!-- Status Indicator -->
             <div id="status-badge" class="px-4 py-2 rounded-full bg-gray-700 text-gray-300 font-medium text-sm">
                 Not Connected
@@ -76,6 +132,29 @@
                 <button id="load-btn" class="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium py-2.5 rounded-lg transition-all">
                     Load Sequence
                 </button>
+
+                <!-- Model Info Panel -->
+                <div id="model-info-panel" class="hidden">
+                    <label class="text-sm text-gray-400 block mb-2">Model Info</label>
+                    <div class="bg-[#1a1a24] rounded-lg p-3 space-y-2 text-xs">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">YOLO Model</span>
+                            <span id="model-name" class="font-medium text-cyan-400">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Conf Threshold</span>
+                            <span id="conf-threshold" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Keypoint Threshold</span>
+                            <span id="kpt-threshold" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Input Size</span>
+                            <span id="input-size" class="font-medium">-</span>
+                        </div>
+                    </div>
+                </div>
 
                 <hr class="border-[#2a2a3a]">
 
@@ -148,15 +227,15 @@
 
         <!-- Main Content - Video Panels -->
         <main class="flex-1 p-6">
-            <div class="grid grid-cols-2 gap-6 h-[calc(100vh-120px)]">
+            <div id="video-grid" class="grid grid-cols-2 gap-6 h-[calc(100vh-120px)]">
                 <!-- Camera View -->
-                <div class="bg-[#121218] rounded-xl border border-[#1f1f2e] overflow-hidden neon-border">
+                <div id="camera-panel" class="bg-[#121218] rounded-xl border border-[#1f1f2e] overflow-hidden neon-border video-panel" onclick="openModal('camera')">
                     <div class="bg-[#1a1a24] px-4 py-3 border-b border-[#2a2a3a] flex items-center justify-between">
                         <div class="flex items-center gap-2">
                             <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                             <span class="font-medium">Camera View</span>
                         </div>
-                        <span class="text-xs text-gray-500">YOLO Detection</span>
+                        <span class="text-xs text-gray-500">Click to enlarge</span>
                     </div>
                     <div class="aspect-video bg-black flex items-center justify-center">
                         <img id="camera-frame" class="w-full h-full object-contain hidden" src="" alt="Camera View">
@@ -170,13 +249,13 @@
                 </div>
 
                 <!-- BEV View -->
-                <div class="bg-[#121218] rounded-xl border border-[#1f1f2e] overflow-hidden neon-border">
+                <div id="bev-panel" class="bg-[#121218] rounded-xl border border-[#1f1f2e] overflow-hidden neon-border video-panel" onclick="openModal('bev')">
                     <div class="bg-[#1a1a24] px-4 py-3 border-b border-[#2a2a3a] flex items-center justify-between">
                         <div class="flex items-center gap-2">
                             <div class="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
                             <span class="font-medium">Bird's Eye View (BEV)</span>
                         </div>
-                        <span class="text-xs text-gray-500">Risk Zone Overlay</span>
+                        <span class="text-xs text-gray-500">Click to enlarge</span>
                     </div>
                     <div class="aspect-video bg-black flex items-center justify-center">
                         <img id="bev-frame" class="w-full h-full object-contain hidden" src="" alt="BEV View">
@@ -190,6 +269,13 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="image-modal" class="modal-overlay" onclick="closeModal()">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <div class="modal-title" id="modal-title">Camera View</div>
+        <img id="modal-image" class="modal-content" src="" alt="Enlarged View">
     </div>
 
     <!-- Analytics Tab -->
@@ -507,6 +593,28 @@
                     totalFrames = data.total_frames;
                     frameSlider.max = totalFrames - 1;
                     frameCounter.textContent = `1 / ${totalFrames}`;
+
+                    // 모델 정보 표시
+                    if (data.model_info) {
+                        const modelInfoPanel = document.getElementById('model-info-panel');
+                        modelInfoPanel.classList.remove('hidden');
+
+                        document.getElementById('model-name').textContent = data.model_info.yolo_model || '-';
+
+                        // conf_threshold 표시 (dict 형식 처리)
+                        const confThres = data.model_info.conf_threshold;
+                        if (typeof confThres === 'object') {
+                            const thresText = Object.entries(confThres)
+                                .map(([k, v]) => `${k}: ${v}`)
+                                .join(', ');
+                            document.getElementById('conf-threshold').textContent = thresText;
+                        } else {
+                            document.getElementById('conf-threshold').textContent = confThres || '-';
+                        }
+
+                        document.getElementById('kpt-threshold').textContent = data.model_info.keypoint_threshold || '-';
+                        document.getElementById('input-size').textContent = data.model_info.imgsz || '-';
+                    }
                 }
             } else if (data.type === 'frame') {
                 updateFrame(data);
@@ -629,6 +737,73 @@
 
         speedSlider.addEventListener('input', () => {
             speedValue.textContent = `${speedSlider.value} FPS`;
+        });
+
+        // View Mode functions
+        let currentViewMode = 'dual';
+
+        function setViewMode(mode) {
+            currentViewMode = mode;
+            const videoGrid = document.getElementById('video-grid');
+            const cameraPanel = document.getElementById('camera-panel');
+            const bevPanel = document.getElementById('bev-panel');
+            const viewDual = document.getElementById('view-dual');
+            const viewCamera = document.getElementById('view-camera');
+            const viewBev = document.getElementById('view-bev');
+
+            // Reset button styles
+            [viewDual, viewCamera, viewBev].forEach(btn => {
+                btn.className = 'px-3 py-1.5 text-xs font-medium rounded text-gray-400 hover:text-white hover:bg-[#252532]';
+            });
+
+            if (mode === 'dual') {
+                videoGrid.className = 'grid grid-cols-2 gap-6 h-[calc(100vh-120px)]';
+                cameraPanel.classList.remove('hidden');
+                bevPanel.classList.remove('hidden');
+                viewDual.className = 'px-3 py-1.5 text-xs font-medium rounded bg-cyan-600 text-white';
+            } else if (mode === 'camera') {
+                videoGrid.className = 'grid grid-cols-1 gap-6 h-[calc(100vh-120px)]';
+                cameraPanel.classList.remove('hidden');
+                bevPanel.classList.add('hidden');
+                viewCamera.className = 'px-3 py-1.5 text-xs font-medium rounded bg-cyan-600 text-white';
+            } else if (mode === 'bev') {
+                videoGrid.className = 'grid grid-cols-1 gap-6 h-[calc(100vh-120px)]';
+                cameraPanel.classList.add('hidden');
+                bevPanel.classList.remove('hidden');
+                viewBev.className = 'px-3 py-1.5 text-xs font-medium rounded bg-cyan-600 text-white';
+            }
+        }
+
+        // Modal functions
+        function openModal(type) {
+            const modal = document.getElementById('image-modal');
+            const modalImage = document.getElementById('modal-image');
+            const modalTitle = document.getElementById('modal-title');
+
+            if (type === 'camera') {
+                const src = document.getElementById('camera-frame').src;
+                if (src && !src.endsWith('undefined')) {
+                    modalImage.src = src;
+                    modalTitle.textContent = 'Camera View';
+                    modal.classList.add('active');
+                }
+            } else if (type === 'bev') {
+                const src = document.getElementById('bev-frame').src;
+                if (src && !src.endsWith('undefined')) {
+                    modalImage.src = src;
+                    modalTitle.textContent = "Bird's Eye View (BEV)";
+                    modal.classList.add('active');
+                }
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('image-modal').classList.remove('active');
+        }
+
+        // ESC key to close modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
         });
 
         init();
