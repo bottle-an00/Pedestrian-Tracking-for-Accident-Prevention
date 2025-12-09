@@ -27,6 +27,10 @@ def main():
     parser.add_argument("--output", type=str, default="results/eval_result.pkl")
     parser.add_argument("--pred-json-dir", type=str, default=None,
                         help="Directory containing prediction JSON files for trajectory evaluation")
+    parser.add_argument("--pred-frame-start", type=int, default=None,
+                        help="Optional: start frame index (inclusive) for ADE/FDE evaluation")
+    parser.add_argument("--pred-frame-end", type=int, default=None,
+                        help="Optional: end frame index (inclusive) for ADE/FDE evaluation")
 
     args = parser.parse_args()
 
@@ -57,6 +61,8 @@ def main():
                     use_hungarian=False,
                     calibration_dir=seq_path,
                     result=result,
+                    pred_frame_start=args.pred_frame_start,
+                    pred_frame_end=args.pred_frame_end,
                 )
     else:
         parser.error("Either --data-root or (--image-dir and --image-label-dir) required")

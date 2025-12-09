@@ -583,6 +583,8 @@ class MultiSequenceEvaluator:
         use_hungarian: bool = False,
         calibration_dir: Union[str, Path] = None,
         result: EvaluationResult = None,
+        pred_frame_start: int = None,
+        pred_frame_end: int = None,
     ) -> Dict:
         """Evaluate trajectory predictions (ADE/FDE) for a single sequence using pred JSONs.
 
@@ -614,6 +616,8 @@ class MultiSequenceEvaluator:
             T=T,
             distance_threshold=distance_threshold,
             use_hungarian=use_hungarian,
+            pred_frame_start=pred_frame_start,
+            pred_frame_end=pred_frame_end,
             bev_transformer=bev,
         )
 
