@@ -26,6 +26,8 @@ def evaluate_prediction_sequence(
     bev_transformer=None,
     pred_in_bev_pixels: bool = False,
     id_match_first: bool = False,
+    pred_frame_start: int = None,
+    pred_frame_end: int = None,
 ) -> Dict:
     """Evaluate prediction JSONs against GT lidar labels for ADE/FDE.
 
@@ -65,7 +67,20 @@ def evaluate_prediction_sequence(
 
     # only include files exactly matching frame_<digits>.json (exclude frame_XXXX.match.json)
     import re
-    pred_files = sorted([p for p in pred_json_dir.glob("frame_*.json") if re.match(r"^frame_\d+\.json$", p.name)])
+    pred_files_all = sorted([p for p in pred_json_dir.glob("frame_*.json") if re.match(r"^frame_\d+\.json$", p.name)])
+
+    # If frame range provided, filter files to that inclusive range
+    if pred_frame_start is not None or pred_frame_end is not None:
+        pred_files = []
+        for p in pred_files_all:
+            idx = int(p.stem.split('_')[-1])
+            if pred_frame_start is not None and idx < int(pred_frame_start):
+                continue
+            if pred_frame_end is not None and idx > int(pred_frame_end):
+                continue
+            pred_files.append(p)
+    else:
+        pred_files = pred_files_all
 
     # First pass: load all predictions and GTs per frame and store them
     frames = []

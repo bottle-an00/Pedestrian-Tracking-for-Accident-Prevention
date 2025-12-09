@@ -24,14 +24,23 @@ def test_full_pipeline():
     cfg = load_yaml("configs/system.yaml")
     root_dir = "dataset_dir"
 
-    image_dir = Path(cfg[root_dir]["images"])
-    gps_dir = Path(cfg[root_dir]["gps"])
+    # Allow overriding the dataset at runtime via environment variable (useful for batch runs)
+    import os
+    env_seq = os.environ.get('DATASET_ID')
+    if env_seq:
+        image_dir = Path('data') / 'raw' / env_seq / 'image0'
+        gps_dir = Path('data') / 'raw' / env_seq / 'gps'
+        out_root = Path('data') / 'raw' / env_seq / 'outputs' / 'full_pipeline_test'
+    else:
+        image_dir = Path(cfg[root_dir]["images"])
+        gps_dir = Path(cfg[root_dir]["gps"])
 
-    out_root = Path(cfg[root_dir]["outputs"]) / "full_pipeline_test"
+        out_root = Path(cfg[root_dir]["outputs"]) / "full_pipeline_test"
     out_root.mkdir(parents=True, exist_ok=True)
 
     out_ekf_bev = out_root / "ekf_bev"
     out_ekf_img = out_root / "ekf_img"
+    pred_out_root = out_root / "pred_json"
 
     for p in [out_ekf_bev, out_ekf_img]:
         p.mkdir(parents=True, exist_ok=True)
@@ -63,6 +72,9 @@ def test_full_pipeline():
     # If True, use a standalone CV EKFManager to provide current+future predictions (no lag smoothing).
     # If False, use PedestrianStateManager with ekf_constructor (e.g. lag-wrapped EKF) as the single-truth filter.
     USE_EKF_MANAGER = True
+
+    # If True, only visualize objects that are currently detected by the detector
+    VIS_ONLY_DETECTIONS = True
 
     # Prepare PedestrianStateManager (kept available if we choose non-manager mode later)
     state_manager = PedestrianStateManager(
@@ -258,8 +270,14 @@ def test_full_pipeline():
 
         print(f"[EKFSource][frame={frame_idx}] {ekf_source_map}")
 
+        # which track ids are present in current detections
+        detected_ids = set(int(fbm.id) for fbm in foot_bevs_m)
+
         for tid, xy in ekf_now.items():
             if xy is None:
+                continue
+            # optionally skip visualization for tracks that are not currently detected
+            if VIS_ONLY_DETECTIONS and int(tid) not in detected_ids:
                 continue
             lx, ly = float(xy[0]), float(xy[1])
             u_bev, v_bev = H.world_to_bev_img_pixel(lx, ly, flipped=True)
@@ -270,6 +288,9 @@ def test_full_pipeline():
 
         for tid, future in ekf_future.items():
             if future is None:
+                continue
+            # optionally skip visualization for tracks that are not currently detected
+            if VIS_ONLY_DETECTIONS and int(tid) not in detected_ids:
                 continue
             bev_future_pts = []
             img_uvs = []
@@ -368,6 +389,49 @@ def test_full_pipeline():
 
         cv2.imwrite(str(out_ekf_bev / f"ekf_bev_gt_{img_path.name}"), gt_vis)
         cv2.imwrite(str(out_ekf_img / f"ekf_img_{img_path.name}"), ekf_img)
+
+        # --- Minimal prediction JSON export for ADE/FDE evaluator ---
+        # Create per-sequence predictions directory
+        pred_out_root.mkdir(parents=True, exist_ok=True)
+
+        # Build prediction JSON structure expected by evaluator
+        # Each frame file: frame_<frame_idx>.json with {'objects':[{'id':id,'pos':[x,y],'future':[[x1,y1],...]}, ...]}
+        pred_objs = []
+        T_required = 20
+        for tid, fut in ekf_future.items():
+            cur = ekf_now.get(tid)
+            if cur is None:
+                continue
+            # ensure future is a list of length T_required; if shorter, pad with last available
+            future_list = []
+            if fut is None:
+                future_list = []
+            else:
+                for p in fut:
+                    try:
+                        future_list.append([float(p[0]), float(p[1])])
+                    except Exception:
+                        pass
+            if len(future_list) < T_required:
+                if future_list:
+                    last = future_list[-1]
+                    while len(future_list) < T_required:
+                        future_list.append(last)
+                else:
+                    # replicate current position
+                    last = [float(cur[0]), float(cur[1])]
+                    future_list = [last for _ in range(T_required)]
+            # trim to T_required
+            future_list = future_list[:T_required]
+
+            pred_objs.append({'id': int(tid), 'pos': [float(cur[0]), float(cur[1])], 'future': future_list})
+
+        pred_frame_path = pred_out_root / f"frame_{frame_idx}.json"
+        try:
+            with open(pred_frame_path, 'w') as pf:
+                json.dump({'objects': pred_objs}, pf, indent=2)
+        except Exception:
+            pass
 
     # End of sequence: print summary of switched tracks
     print(f"[SwitchSummary] total_switched={len(switched_tracks)}, ids={sorted(list(switched_tracks))}")
